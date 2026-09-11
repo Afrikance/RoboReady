@@ -4,7 +4,16 @@
 > Arrival Infrastructure Operating System. The AI workforce (StaffGPT) creates the
 > intelligence; RoboReady owns the property data and assets.
 >
-> **Status:** Planning approved-for-review. Build MVP 1 only after explicit sign-off.
+> **Status:** MVP 1 SHIPPED (branch `v0/roboready-mvp1`). MVPs 2–4 pending approval, one at a time.
+>
+> **MVP 1 delivered:** Neon schema (12 tables) + Better Auth email/password + multi-tenancy/roles/audit
+> log · app shell + dashboard · property CRUD + intake questionnaire + document repository (private Blob)
+> · `StaffGPTAdapter` boundary (LocalOrchestrator via AI Gateway `google/gemini-3.5-flash`; real
+> `StaffGPTApiAdapter` stubbed, activates on `STAFFGPT_API_URL`) · AI orchestrator with per-job
+> traceability + approval gates + AI Activity view · assessment engine + 0–100 RoboReady Score + score
+> gauge signature · versioned site concepts · infrastructure assets (EV/robot/landing/drone as one
+> expandable type) + provider-agnostic satellite map · AI report writer + printable PDF route + client
+> portal · Quality Inn & Suites Bel Air demo seed. Production build + typecheck clean; verified in-browser.
 
 ---
 
