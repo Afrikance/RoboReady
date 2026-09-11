@@ -37,10 +37,15 @@ export async function listProperties() {
     .orderBy(desc(property.updatedAt))
 }
 
+// Statuses that are still in the prospecting funnel (not yet real properties).
+// They live in the Prospect DB / Field Work / Verification queues and only
+// surface on the Properties page once an admin verifies them.
+const FUNNEL_ONLY_STATUSES = new Set(["prospect", "handover", "pending_verification"])
+
 /** Latest assessment score per property, for list/overview badges. */
 export async function listPropertiesWithScores() {
   const ctx = await requireOrgContext()
-  const props = await listProperties()
+  const props = (await listProperties()).filter((p) => !FUNNEL_ONLY_STATUSES.has(p.status))
 
   const scores = await db
     .select({

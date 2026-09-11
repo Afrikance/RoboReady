@@ -18,7 +18,8 @@ export default async function ProspectDatabasePage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Prospect database</h1>
         <p className="mt-1 text-sm text-muted-foreground text-pretty">
-          Build a pipeline of candidate properties with AI or by hand. Pre-fill a prospect to hand it to the field team.
+          Scout finds candidate properties, pre-fills the intake, and sends them to Field Work for the team to complete.
+          Manually added properties stage here until you hand them over. Verified properties move to the Properties page.
         </p>
       </div>
       <ProspectDatabase initialProspects={prospects} />

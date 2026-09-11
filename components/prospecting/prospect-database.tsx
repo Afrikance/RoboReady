@@ -1,9 +1,10 @@
 "use client"
 
 import { useMemo, useState, useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Sparkles, Plus, Wand2, Phone, MapPin } from "lucide-react"
+import { Sparkles, Plus, Wand2, Phone, MapPin, ClipboardList, BadgeCheck, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -21,6 +22,13 @@ import {
   type PropertyFilter,
 } from "@/lib/prospecting/filter"
 import { QueueFilterBar } from "@/components/prospecting/queue-filter-bar"
+
+// Where each staged candidate currently sits in the funnel.
+const STAGE: Record<string, { label: string; href: string | null }> = {
+  prospect: { label: "New prospect", href: null },
+  handover: { label: "In field work", href: "/dashboard/handover" },
+  pending_verification: { label: "Awaiting verification", href: "/dashboard/verification" },
+}
 
 export function ProspectDatabase({ initialProspects }: { initialProspects: ProspectRow[] }) {
   const router = useRouter()
@@ -51,20 +59,21 @@ export function ProspectDatabase({ initialProspects }: { initialProspects: Prosp
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">Prospect database</h2>
-          <span className="text-xs text-muted-foreground">{initialProspects.length} total</span>
+          <h2 className="text-sm font-semibold">Prospecting pipeline</h2>
+          <span className="text-xs text-muted-foreground">{initialProspects.length} in the funnel</span>
         </div>
         <QueueFilterBar value={filter} onChange={setFilter} count={filtered.length} />
 
         {filtered.length === 0 ? (
           <p className="rounded-lg border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-            No prospects match. Generate candidates with AI or add one manually.
+            No candidates in the funnel. Generate some with AI — Scout pre-fills each one and sends it to Field Work.
           </p>
         ) : (
           <ul className="grid gap-3">
             {filtered.map((p) => {
               const note = readProspectNote(p.metadata)
               const miles = distanceFrom(p, filter.ref)
+              const stage = STAGE[p.status] ?? { label: p.status, href: null }
               return (
                 <li key={p.id} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -72,6 +81,19 @@ export function ProspectDatabase({ initialProspects }: { initialProspects: Prosp
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="font-medium">{p.name}</p>
                         <Badge variant="secondary" className="text-[10px]">{propertyTypeLabel(p.propertyType)}</Badge>
+                        <Badge
+                          variant={p.status === "prospect" ? "outline" : "default"}
+                          className="gap-1 text-[10px]"
+                        >
+                          {p.status === "pending_verification" ? (
+                            <BadgeCheck className="h-3 w-3" />
+                          ) : p.status === "handover" ? (
+                            <ClipboardList className="h-3 w-3" />
+                          ) : (
+                            <Sparkles className="h-3 w-3" />
+                          )}
+                          {stage.label}
+                        </Badge>
                         {miles != null ? (
                           <span className="text-xs text-muted-foreground">{miles.toFixed(1)} mi</span>
                         ) : null}
@@ -87,10 +109,18 @@ export function ProspectDatabase({ initialProspects }: { initialProspects: Prosp
                       ) : null}
                       {note ? <p className="mt-2 text-xs text-muted-foreground text-pretty">{note}</p> : null}
                     </div>
-                    <Button size="sm" onClick={() => runPrefill(p.id)} disabled={prefilling === p.id}>
-                      <Wand2 className="mr-1.5 h-3.5 w-3.5" />
-                      {prefilling === p.id ? "Pre-filling…" : "AI pre-fill → hand over"}
-                    </Button>
+                    {p.status === "prospect" ? (
+                      <Button size="sm" onClick={() => runPrefill(p.id)} disabled={prefilling === p.id}>
+                        <Wand2 className="mr-1.5 h-3.5 w-3.5" />
+                        {prefilling === p.id ? "Pre-filling…" : "AI pre-fill → hand over"}
+                      </Button>
+                    ) : stage.href ? (
+                      <Button size="sm" variant="outline" asChild>
+                        <Link href={stage.href}>
+                          View <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                    ) : null}
                   </div>
                 </li>
               )
@@ -113,7 +143,7 @@ function AiProspectForm({ onDone }: { onDone: () => void }) {
     startTransition(async () => {
       const res = await prospectProperties({ city, region, propertyType, count })
       if (res.ok) {
-        toast.success(`Scout added ${res.data.created} prospect(s).`)
+        toast.success(`Scout pre-filled ${res.data.created} candidate(s) and sent them to Field Work.`)
         onDone()
       } else {
         toast.error(res.error)
@@ -129,7 +159,9 @@ function AiProspectForm({ onDone }: { onDone: () => void }) {
         </span>
         <div>
           <h3 className="text-sm font-semibold">AI prospecting</h3>
-          <p className="text-xs text-muted-foreground">Scout suggests candidate properties for a market.</p>
+          <p className="text-xs text-muted-foreground">
+            Scout finds candidates, pre-fills the intake, and sends them to Field Work.
+          </p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -169,10 +201,11 @@ function AiProspectForm({ onDone }: { onDone: () => void }) {
       </div>
       <Button onClick={submit} disabled={pending || !city.trim() || !region.trim()} className="w-full">
         <Sparkles className="mr-1.5 h-4 w-4" />
-        {pending ? "Scout is prospecting…" : "Generate prospects"}
+        {pending ? "Scout is prospecting & pre-filling…" : "Generate & send to Field Work"}
       </Button>
       <p className="text-[11px] text-muted-foreground text-pretty">
-        AI suggestions are unverified leads — a human confirms every detail before assessment.
+        AI suggestions are unverified leads — the field team completes them and an admin verifies before a property is
+        created. Each candidate runs an AI pre-fill, so larger batches take longer.
       </p>
     </div>
   )

@@ -106,9 +106,14 @@ export async function prospectProperties(input: {
 
       const lat = Number.isFinite(c.latitude) && c.latitude !== 0 ? c.latitude : null
       const lng = Number.isFinite(c.longitude) && c.longitude !== 0 ? c.longitude : null
+      const id = crypto.randomUUID()
+      const metadata: Record<string, unknown> = {
+        pipeline: { source: "ai", prospectJobId: job.jobId },
+        prospectNote: c.note ?? null,
+      }
 
       await db.insert(property).values({
-        id: crypto.randomUUID(),
+        id,
         organizationId: ctx.organizationId,
         createdByUserId: ctx.user.id,
         name,
@@ -121,9 +126,30 @@ export async function prospectProperties(input: {
         latitude: lat,
         longitude: lng,
         status: "prospect",
-        metadata: { pipeline: { source: "ai", prospectJobId: job.jobId }, prospectNote: c.note ?? null },
+        metadata,
       })
       created++
+
+      // Scout pre-fills the intake and advances the candidate straight to the
+      // Field Work list. Pre-fill is best-effort: if the AI call fails, the
+      // candidate still moves to handover so a human can complete it manually.
+      try {
+        await prefillIntoHandover(ctx, {
+          id,
+          name,
+          propertyType: c.propertyType || "commercial",
+          city: c.city?.trim() || city,
+          region: c.region?.trim() || region,
+          country: null,
+          metadata,
+        })
+      } catch (err) {
+        console.log("[v0] auto pre-fill failed for", name, (err as Error).message)
+        await db
+          .update(property)
+          .set({ status: "handover", updatedAt: new Date() })
+          .where(and(eq(property.id, id), eq(property.organizationId, ctx.organizationId)))
+      }
     }
 
     await recordAudit({
@@ -135,6 +161,7 @@ export async function prospectProperties(input: {
     })
 
     revalidatePath("/dashboard/properties/database")
+    revalidatePath("/dashboard/handover")
     return { ok: true, data: { created } }
   } catch (err) {
     console.log("[v0] prospectProperties failed:", (err as Error).message)
@@ -143,9 +170,104 @@ export async function prospectProperties(input: {
 }
 
 // ---------------------------------------------------------------------------
-// AI pre-fill + handover (admin/member)
+// AI pre-fill + handover
 // ---------------------------------------------------------------------------
 
+type PrefillTarget = {
+  id: string
+  name: string
+  propertyType: string
+  city: string | null
+  region: string | null
+  country: string | null
+  metadata: unknown
+}
+
+/**
+ * Runs Vero against the standard intake questionnaire for one property, merges
+ * the confident answers onto any existing draft (never clobbering human data),
+ * records which fields were filled vs left blank, and advances the property to
+ * the Field Work list (`handover`). Throws on AI failure so callers can decide
+ * how to recover. Does not revalidate — callers own that.
+ */
+async function prefillIntoHandover(
+  ctx: Awaited<ReturnType<typeof requireOrgContext>>,
+  prop: PrefillTarget,
+): Promise<{ filled: number; blank: number }> {
+  const fields = INTAKE_SECTIONS.flatMap((s) =>
+    s.fields.map((f) => ({ id: f.id, label: f.label, type: f.type, options: f.options ?? null })),
+  )
+
+  const job = await runJob<Record<string, unknown>, IntakePrefillOutput>({
+    ctx,
+    propertyId: prop.id,
+    employeeSlug: "intake-prefiller",
+    jobType: "prefill-intake",
+    input: {
+      property: {
+        name: prop.name,
+        type: prop.propertyType,
+        location: [prop.city, prop.region, prop.country].filter(Boolean).join(", "),
+      },
+      fields,
+    },
+  })
+
+  // Coerce AI answers (medium/high confidence only) into the intake map.
+  const aiAnswers: Record<string, unknown> = {}
+  const filled: string[] = []
+  for (const a of job.output.answers ?? []) {
+    const field = FIELD_BY_ID.get(a.fieldId)
+    if (!field) continue
+    if (a.confidence === "low") continue
+    const value = coerceAnswer(field, String(a.value ?? ""))
+    if (value === undefined) continue
+    aiAnswers[a.fieldId] = value
+    filled.push(a.fieldId)
+  }
+  const leftBlank = (job.output.leftBlank ?? []).filter((id) => FIELD_BY_ID.has(id) && !filled.includes(id))
+
+  // Merge onto any existing draft answers (never clobber human-entered data).
+  const existing = await db
+    .select()
+    .from(intakeSubmission)
+    .where(and(eq(intakeSubmission.propertyId, prop.id), eq(intakeSubmission.organizationId, ctx.organizationId)))
+    .orderBy(desc(intakeSubmission.updatedAt))
+    .limit(1)
+  const prior = (existing[0]?.answers as Record<string, unknown>) ?? {}
+  const answers = { ...prior, ...aiAnswers }
+
+  if (existing[0]) {
+    await db
+      .update(intakeSubmission)
+      .set({ answers, status: "draft", updatedAt: new Date() })
+      .where(eq(intakeSubmission.id, existing[0].id))
+  } else {
+    await db.insert(intakeSubmission).values({
+      id: crypto.randomUUID(),
+      organizationId: ctx.organizationId,
+      propertyId: prop.id,
+      createdByUserId: ctx.user.id,
+      answers,
+      status: "draft",
+    })
+  }
+
+  await db
+    .update(property)
+    .set({
+      status: "handover",
+      metadata: mergePipeline(prop.metadata, {
+        prefill: { jobId: job.jobId, filled, leftBlank, summary: job.output.summary ?? "", at: new Date().toISOString() },
+      }),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(property.id, prop.id), eq(property.organizationId, ctx.organizationId)))
+
+  return { filled: filled.length, blank: leftBlank.length }
+}
+
+/** Manual re-run of AI pre-fill for a single staged prospect (e.g. a manual add). */
 export async function prefillProperty(propertyId: string): Promise<ActionResult<{ filled: number; blank: number }>> {
   const ctx = await requireOrgContext()
   try {
@@ -161,90 +283,20 @@ export async function prefillProperty(propertyId: string): Promise<ActionResult<
     .limit(1)
   if (!prop) return { ok: false, error: "Property not found." }
 
-  const fields = INTAKE_SECTIONS.flatMap((s) =>
-    s.fields.map((f) => ({ id: f.id, label: f.label, type: f.type, options: f.options ?? null })),
-  )
-
   try {
-    const job = await runJob<Record<string, unknown>, IntakePrefillOutput>({
-      ctx,
-      propertyId,
-      employeeSlug: "intake-prefiller",
-      jobType: "prefill-intake",
-      input: {
-        property: {
-          name: prop.name,
-          type: prop.propertyType,
-          location: [prop.city, prop.region, prop.country].filter(Boolean).join(", "),
-        },
-        fields,
-      },
-    })
-
-    // Coerce AI answers (medium/high confidence only) into the intake map.
-    const aiAnswers: Record<string, unknown> = {}
-    const filled: string[] = []
-    for (const a of job.output.answers ?? []) {
-      const field = FIELD_BY_ID.get(a.fieldId)
-      if (!field) continue
-      if (a.confidence === "low") continue
-      const value = coerceAnswer(field, String(a.value ?? ""))
-      if (value === undefined) continue
-      aiAnswers[a.fieldId] = value
-      filled.push(a.fieldId)
-    }
-    const leftBlank = (job.output.leftBlank ?? []).filter((id) => FIELD_BY_ID.has(id) && !filled.includes(id))
-
-    // Merge onto any existing draft answers (never clobber human-entered data).
-    const existing = await db
-      .select()
-      .from(intakeSubmission)
-      .where(and(eq(intakeSubmission.propertyId, propertyId), eq(intakeSubmission.organizationId, ctx.organizationId)))
-      .orderBy(desc(intakeSubmission.updatedAt))
-      .limit(1)
-    const prior = (existing[0]?.answers as Record<string, unknown>) ?? {}
-    const answers = { ...prior, ...aiAnswers }
-
-    if (existing[0]) {
-      await db
-        .update(intakeSubmission)
-        .set({ answers, status: "draft", updatedAt: new Date() })
-        .where(eq(intakeSubmission.id, existing[0].id))
-    } else {
-      await db.insert(intakeSubmission).values({
-        id: crypto.randomUUID(),
-        organizationId: ctx.organizationId,
-        propertyId,
-        createdByUserId: ctx.user.id,
-        answers,
-        status: "draft",
-      })
-    }
-
-    await db
-      .update(property)
-      .set({
-        status: "handover",
-        metadata: mergePipeline(prop.metadata, {
-          prefill: { jobId: job.jobId, filled, leftBlank, summary: job.output.summary ?? "", at: new Date().toISOString() },
-        }),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-
+    const res = await prefillIntoHandover(ctx, prop)
     await recordAudit({
       organizationId: ctx.organizationId,
       userId: ctx.user.id,
       action: "prospect.prefilled",
       entityType: "property",
       entityId: propertyId,
-      metadata: { filled: filled.length, blank: leftBlank.length },
+      metadata: { filled: res.filled, blank: res.blank },
     })
-
     revalidatePath("/dashboard/properties/database")
     revalidatePath("/dashboard/handover")
     revalidatePath(`/dashboard/properties/${propertyId}`)
-    return { ok: true, data: { filled: filled.length, blank: leftBlank.length } }
+    return { ok: true, data: res }
   } catch (err) {
     console.log("[v0] prefillProperty failed:", (err as Error).message)
     return { ok: false, error: "AI pre-fill could not be completed. Please try again." }
@@ -348,8 +400,11 @@ async function listByStatus(statuses: string[]) {
     .orderBy(desc(property.updatedAt))
 }
 
+// The Prospect DB is an admin staging/audit view: it shows every candidate
+// still moving through the funnel (freshly generated, in field work, or awaiting
+// verification). Verified items leave the funnel and appear on the Properties page.
 export async function listProspects() {
-  return listByStatus(["prospect"])
+  return listByStatus(["prospect", "handover", "pending_verification"])
 }
 
 export async function listHandoverQueue() {
