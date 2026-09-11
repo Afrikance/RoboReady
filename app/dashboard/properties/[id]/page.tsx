@@ -7,6 +7,11 @@ import { listDocuments } from "@/app/actions/documents"
 import { PropertyTabs, type TabDef } from "@/components/property/property-tabs"
 import { IntakeForm } from "@/components/intake/intake-form"
 import { DocumentPanel } from "@/components/documents/document-panel"
+import { AssessmentPanel } from "@/components/assessment/assessment-panel"
+import { ConceptPanel } from "@/components/concept/concept-panel"
+import { AssetPanel } from "@/components/assets/asset-panel"
+import { getLatestAssessment, getLatestConcept } from "@/app/actions/assessment"
+import { listAssets } from "@/app/actions/assets"
 import { intakeCompletion } from "@/lib/intake/questions"
 import { Badge } from "@/components/ui/badge"
 
@@ -25,9 +30,16 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const property = await getProperty(id)
   if (!property) notFound()
 
-  const [intake, docs] = await Promise.all([getIntake(id), listDocuments(id)])
+  const [intake, docs, assessment, concept, assets] = await Promise.all([
+    getIntake(id),
+    listDocuments(id),
+    getLatestAssessment(id),
+    getLatestConcept(id),
+    listAssets(id),
+  ])
   const intakeAnswers = (intake?.answers as Record<string, unknown>) ?? {}
   const completion = intakeCompletion(intakeAnswers)
+  const intakeComplete = intake?.status === "completed"
 
   const address = [property.addressLine1, property.city, property.region, property.country]
     .filter(Boolean)
@@ -37,9 +49,9 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     { id: "overview", label: "Overview" },
     { id: "intake", label: "Intake", badge: `${completion}%` },
     { id: "documents", label: "Documents", badge: String(docs.length) },
-    { id: "assessment", label: "Assessment" },
+    { id: "assessment", label: "Assessment", badge: assessment?.roboReadyScore != null ? String(assessment.roboReadyScore) : undefined },
     { id: "concept", label: "Site concept" },
-    { id: "assets", label: "Infrastructure" },
+    { id: "assets", label: "Infrastructure", badge: assets.length ? String(assets.length) : undefined },
     { id: "report", label: "Report" },
   ]
 
@@ -49,9 +61,25 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       <IntakeForm propertyId={id} initialAnswers={intakeAnswers} initialStatus={intake?.status ?? "draft"} />
     ),
     documents: <DocumentPanel propertyId={id} initialDocs={docs} />,
-    assessment: <Placeholder title="Assessment" note="Run the AI readiness assessment from here — coming up next." />,
-    concept: <Placeholder title="Site concept" note="AI-generated site concepts will appear here." />,
-    assets: <Placeholder title="Infrastructure" note="Place EV chargers, landing pads, and other assets on the map." />,
+    assessment: <AssessmentPanel propertyId={id} assessment={assessment} intakeComplete={intakeComplete} />,
+    concept: <ConceptPanel concept={concept} />,
+    assets: (
+      <AssetPanel
+        propertyId={id}
+        centerLat={property.latitude}
+        centerLng={property.longitude}
+        initialAssets={assets.map((a) => ({
+          id: a.id,
+          label: a.label,
+          assetType: a.assetType,
+          latitude: a.latitude,
+          longitude: a.longitude,
+          status: a.status,
+          quantity: a.quantity,
+          unitCost: a.unitCost,
+        }))}
+      />
+    ),
     report: <Placeholder title="Report" note="Generate and export the client-ready report here." />,
   }
 
