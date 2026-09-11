@@ -1,0 +1,43 @@
+"use client"
+
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { cn } from "@/lib/utils"
+import { LayoutDashboard, Building2, Bot, FileText, Users } from "lucide-react"
+
+const NAV = [
+  { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/properties", label: "Properties", icon: Building2 },
+  { href: "/dashboard/ai", label: "AI Activity", icon: Bot },
+  { href: "/dashboard/reports", label: "Reports", icon: FileText },
+  { href: "/dashboard/team", label: "Team", icon: Users },
+]
+
+export function SidebarNav() {
+  const pathname = usePathname()
+
+  return (
+    <nav className="flex flex-col gap-1 px-3 py-2" aria-label="Primary">
+      {NAV.map((item) => {
+        const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+        const Icon = item.icon
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            aria-current={active ? "page" : undefined}
+            className={cn(
+              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              active
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+            )}
+          >
+            <Icon className="size-4 shrink-0" />
+            {item.label}
+          </Link>
+        )
+      })}
+    </nav>
+  )
+}
