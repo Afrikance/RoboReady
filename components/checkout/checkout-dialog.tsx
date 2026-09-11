@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { EmbeddedCheckout, EmbeddedCheckoutProvider } from "@stripe/react-stripe-js"
 import { loadStripe } from "@stripe/stripe-js"
 import { confirmPayment, type CheckoutStart } from "@/app/actions/payments"
+import type { ActionResult } from "@/app/actions/properties"
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,7 @@ const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY 
 
 export function CheckoutDialog({
   start,
+  confirm = confirmPayment,
   triggerLabel,
   title,
   priceLabel,
@@ -27,6 +29,8 @@ export function CheckoutDialog({
   size = "default",
 }: {
   start: () => Promise<CheckoutStart>
+  /** Verifies the completed checkout server-side. Defaults to one-time payment. */
+  confirm?: (id: string) => Promise<ActionResult<{ status: string }>>
   triggerLabel: string
   title: string
   priceLabel: string
@@ -47,7 +51,7 @@ export function CheckoutDialog({
   const onComplete = useCallback(() => {
     const pid = paymentIdRef.current
     if (!pid) return
-    confirmPayment(pid).then((r) => {
+    confirm(pid).then((r) => {
       if (r.ok) {
         setDone(true)
         toast.success("Payment received")
@@ -56,7 +60,7 @@ export function CheckoutDialog({
         toast.error(r.error)
       }
     })
-  }, [router])
+  }, [router, confirm])
 
   return (
     <Dialog

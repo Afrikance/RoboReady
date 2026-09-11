@@ -24,6 +24,8 @@ import { ProposalPanel } from "@/components/proposal/proposal-panel"
 import { getWayfinding, getAccessibility, getEvPlan } from "@/app/actions/planners"
 import { getLatestProposal } from "@/app/actions/proposals"
 import { listPayments } from "@/app/actions/payments"
+import { getActiveSubscription } from "@/app/actions/subscriptions"
+import { ServicePlanPanel } from "@/components/plans/service-plan-panel"
 import { getOrgContext } from "@/lib/tenancy"
 import { canUsePropertyTab } from "@/lib/access"
 import { intakeCompletion } from "@/lib/intake/questions"
@@ -48,7 +50,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const property = await getProperty(id)
   if (!property) notFound()
 
-  const [intake, docs, assessment, concept, plan, assets, reportCtx, wayfinding, accessibility, ev, proposal, payments, ctx] =
+  const [intake, docs, assessment, concept, plan, assets, reportCtx, wayfinding, accessibility, ev, proposal, payments, subscription, ctx] =
     await Promise.all([
       getIntake(id),
       listDocuments(id),
@@ -62,6 +64,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
       getEvPlan(id),
       getLatestProposal(id),
       listPayments(id),
+      getActiveSubscription(id),
       getOrgContext(),
     ])
   const intakeAnswers = (intake?.answers as Record<string, unknown>) ?? {}
@@ -98,6 +101,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     { id: "accessibility", label: "Accessibility", badge: accessibility?.score != null ? String(accessibility.score) : undefined },
     { id: "ev", label: "EV charging" },
     { id: "proposal", label: "Proposal", badge: proposal ? `v${proposal.version}` : undefined },
+    { id: "care", label: "Care plan", badge: subscription ? "Active" : undefined },
     { id: "report", label: "Report" },
   ]
   const tabs = allTabs.filter((tab) => canUsePropertyTab(role, tab.id))
@@ -147,6 +151,24 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     ev: <EvPanel propertyId={id} plan={ev} />,
     proposal: (
       <ProposalPanel propertyId={id} proposal={proposal} payments={payments} assessmentReady={assessmentReady} />
+    ),
+    care: (
+      <ServicePlanPanel
+        propertyId={id}
+        active={
+          subscription
+            ? {
+                id: subscription.id,
+                planId: subscription.planId,
+                interval: subscription.interval,
+                amountCents: subscription.amountCents,
+                currentPeriodEnd: subscription.currentPeriodEnd,
+                cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+              }
+            : null
+        }
+        locked={["prospect", "handover", "pending_verification"].includes(property.status)}
+      />
     ),
     report: reportCtx ? <ReportPanel propertyId={id} ctx={reportCtx} /> : null,
   }
