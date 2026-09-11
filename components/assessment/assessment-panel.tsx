@@ -1,10 +1,29 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
 import { RunAssessment } from "@/components/assessment/run-assessment"
 import { TierPicker } from "@/components/assessment/tier-picker"
-import type { AssessmentTierId } from "@/lib/products"
+import { CheckoutDialog } from "@/components/checkout/checkout-dialog"
+import { startAssessmentCheckout } from "@/app/actions/payments"
+import { ASSESSMENT_TIERS, tierRank, type AssessmentTier, type AssessmentTierId } from "@/lib/products"
 import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
 import { Badge } from "@/components/ui/badge"
-import { AlertTriangle, Lightbulb } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { AlertTriangle, Lightbulb, Sparkles } from "lucide-react"
+
+function priceLabel(cents: number) {
+  return (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
+}
+
+/**
+ * The tier to nudge the owner toward after an assessment runs. With nothing
+ * purchased we recommend the featured Standard tier; otherwise the next tier
+ * up. Returns null once the top tier is owned.
+ */
+function recommendedUpsell(purchasedTier: AssessmentTierId | null): AssessmentTier | null {
+  const rank = tierRank(purchasedTier)
+  if (rank >= 3) return null
+  if (rank === 0) return ASSESSMENT_TIERS.find((t) => t.id === "standard") ?? null
+  return ASSESSMENT_TIERS.find((t) => t.rank === rank + 1) ?? null
+}
 
 const SEVERITY_STYLE: Record<string, string> = {
   high: "text-[var(--score-low)]",
@@ -106,6 +125,7 @@ export function AssessmentPanel({
   const recommendations =
     (assessment.recommendations as Array<{ title: string; priority: string; detail: string; estimatedImpact: string }>) ??
     []
+  const upsell = recommendedUpsell(purchasedTier)
 
   return (
     <div className="space-y-8">
@@ -122,6 +142,37 @@ export function AssessmentPanel({
           </div>
         </div>
       </div>
+
+      {upsell ? (
+        <div className="flex flex-col gap-4 rounded-lg border border-primary bg-primary/5 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <Sparkles className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold">
+                {purchasedTier ? `Upgrade to ${upsell.name}` : `Unlock the full ${upsell.name}`}
+              </p>
+              <p className="max-w-md text-xs text-muted-foreground text-pretty">
+                {purchasedTier
+                  ? upsell.description
+                  : "This score is a preview. Purchase a report package to share the site concept, infrastructure plan, and cost estimates with the property owner."}
+              </p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <CheckoutDialog
+              start={startAssessmentCheckout.bind(null, propertyId, upsell.id)}
+              triggerLabel={`${purchasedTier ? "Upgrade" : "Buy"} · ${priceLabel(upsell.priceInCents)}`}
+              title={`Purchase ${upsell.name}`}
+              priceLabel={`One-time ${priceLabel(upsell.priceInCents)} — ${upsell.description}`}
+            />
+            <Button asChild variant="ghost" size="sm">
+              <a href="#report-package">Compare tiers</a>
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {breakdown.length > 0 ? (
         <section className="space-y-3">
@@ -231,7 +282,7 @@ export function AssessmentPanel({
         ) : null}
       </div>
 
-      <section className="space-y-3 border-t border-border pt-6">
+      <section id="report-package" className="scroll-mt-6 space-y-3 border-t border-border pt-6">
         <div>
           <h3 className="text-sm font-semibold">Report package</h3>
           <p className="text-xs text-muted-foreground text-pretty">

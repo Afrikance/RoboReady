@@ -5,7 +5,18 @@ import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { Logo } from "@/components/brand/logo"
 import { ScoreGauge } from "@/components/score/score-gauge"
-import { Bot, MapPin, FileText, ClipboardCheck, ArrowRight } from "lucide-react"
+import { SiteFooter } from "@/components/marketing/site-footer"
+import { ASSESSMENT_TIERS } from "@/lib/products"
+import { Badge } from "@/components/ui/badge"
+import { Bot, MapPin, FileText, ClipboardCheck, ArrowRight, Check } from "lucide-react"
+
+function priceLabel(cents: number) {
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  })
+}
 
 export default async function LandingPage() {
   const session = await auth.api.getSession({ headers: await headers() })
@@ -13,9 +24,21 @@ export default async function LandingPage() {
 
   return (
     <div className="flex min-h-svh flex-col">
-      <header className="flex h-16 items-center justify-between border-b px-6">
-        <Logo />
-        <nav className="flex items-center gap-2">
+      <header className="sticky top-0 z-40 flex h-20 items-center justify-between border-b bg-background/80 px-6 backdrop-blur">
+        <Logo size="lg" />
+        <nav className="flex items-center gap-1 sm:gap-2">
+          <Link
+            href="#features"
+            className="hidden rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
+          >
+            Features
+          </Link>
+          <Link
+            href="#pricing"
+            className="hidden rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground sm:inline-flex"
+          >
+            Pricing
+          </Link>
           <Button asChild variant="ghost">
             <Link href="/sign-in">Sign in</Link>
           </Button>
@@ -49,7 +72,7 @@ export default async function LandingPage() {
                 </Link>
               </Button>
               <Button asChild size="lg" variant="outline">
-                <Link href="/sign-in">Sign in</Link>
+                <Link href="#pricing">See pricing</Link>
               </Button>
             </div>
           </div>
@@ -65,7 +88,7 @@ export default async function LandingPage() {
           </div>
         </section>
 
-        <section className="border-t bg-secondary/40">
+        <section id="features" className="scroll-mt-24 border-t bg-secondary/40">
           <div className="mx-auto grid max-w-6xl gap-6 px-6 py-16 sm:grid-cols-2 lg:grid-cols-4">
             <Feature
               icon={ClipboardCheck}
@@ -89,14 +112,63 @@ export default async function LandingPage() {
             />
           </div>
         </section>
+
+        <section id="pricing" className="scroll-mt-24 border-t">
+          <div className="mx-auto max-w-6xl px-6 py-20">
+            <div className="mx-auto max-w-2xl text-center">
+              <h2 className="text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
+                Simple, one-time pricing
+              </h2>
+              <p className="mt-3 text-lg leading-relaxed text-muted-foreground text-pretty">
+                Start with a fast readiness snapshot, or go straight to a build-ready report. Every tier is a
+                one-time assessment of a single property.
+              </p>
+            </div>
+
+            <div className="mt-12 grid gap-6 lg:grid-cols-3">
+              {ASSESSMENT_TIERS.map((tier) => (
+                <div
+                  key={tier.id}
+                  className={
+                    tier.featured
+                      ? "relative flex flex-col rounded-xl border-2 border-primary bg-card p-6 shadow-sm"
+                      : "relative flex flex-col rounded-xl border bg-card p-6"
+                  }
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-lg font-semibold">{tier.name}</h3>
+                    {tier.featured ? <Badge>Most popular</Badge> : null}
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">{tier.tagline}</p>
+                  <div className="mt-5 flex items-baseline gap-1.5">
+                    <span className="text-4xl font-semibold tracking-tight">{priceLabel(tier.priceInCents)}</span>
+                    <span className="text-sm text-muted-foreground">one-time</span>
+                  </div>
+                  <ul className="mt-6 flex-1 space-y-3">
+                    {tier.highlights.map((h) => (
+                      <li key={h} className="flex items-start gap-2.5 text-sm text-pretty">
+                        <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                        <span>{h}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button asChild className="mt-8 w-full" variant={tier.featured ? "default" : "outline"}>
+                    <Link href="/sign-up">
+                      Get started
+                      <ArrowRight className="size-4" />
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <p className="mt-8 text-center text-sm text-muted-foreground text-pretty">
+              Need ongoing monitoring or maintenance? Ask about our Care plans after your assessment.
+            </p>
+          </div>
+        </section>
       </main>
 
-      <footer className="border-t px-6 py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 text-sm text-muted-foreground sm:flex-row">
-          <Logo />
-          <p>© {new Date().getFullYear()} RoboReady. All rights reserved.</p>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   )
 }
