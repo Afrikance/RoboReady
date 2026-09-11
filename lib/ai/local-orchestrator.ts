@@ -48,7 +48,7 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
   wayfinding: {
     schema: wayfindingSchema,
     instructions:
-      "Design circulation for this property. Prioritize the primary robotaxi / CyberCab use case: use mode 'robotaxi' for curb-to-entrance passenger handoff routes between pick-up/drop-off zones and building entrances, then add robot/drone routes. Include clearance requirements and machine-readable signage/beacon placements. Ground it in the property's real layout and assessment.",
+      "Design circulation for this property, centered on the primary robotaxi / CyberCab use case. (1) passengerJourney: produce an ordered, plain-language route a HOTEL GUEST follows from their room / start point (use the interior survey fields: guestPathStart, path steps, elevators, doors, landmarks, pickup elevation) to the robotaxi LandingPad / pickup zone — each step has a location, a clear instruction, a confirming landmark, a mode (walk/elevator/outdoor), and the boarding signal to expect. (2) boardingSignals: give the guest-facing signal legend — Blue = vehicle reserved and en route (start walking); Amber = arriving, get ready at the boarding line; GREEN FLASHING = doors open, board now; Red = do not approach (maneuvering/emergency). (3) routes: use mode 'robotaxi' for curb-to-entrance handoff plus robot/drone routes with clearance requirements. (4) signage: machine-readable signage/beacon placements. Ground everything in the property's real layout, interior survey, and assessment.",
   },
   accessibility: {
     schema: accessibilitySchema,

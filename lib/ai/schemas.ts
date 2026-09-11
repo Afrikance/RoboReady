@@ -194,6 +194,16 @@ export const leadQualificationSchema = z.object({
 })
 export type LeadQualificationOutput = z.infer<typeof leadQualificationSchema>
 
+// Canonical passenger boarding-signal system (master spec §6 LandingPad
+// states). The UI always renders this legend; the model may echo or refine it
+// via the wayfinding output's `boardingSignals`.
+export const BOARDING_SIGNAL_LEGEND = [
+  { signal: "blue" as const, meaning: "Vehicle reserved and en route to the pickup point.", guestAction: "Begin walking to the LandingPad." },
+  { signal: "amber" as const, meaning: "Vehicle is arriving and positioning at the pad.", guestAction: "Get ready at the boarding line; do not step onto the pad yet." },
+  { signal: "green" as const, meaning: "Green flashing: doors open, safe to board now.", guestAction: "Board the vehicle." },
+  { signal: "red" as const, meaning: "Do not approach — vehicle maneuvering or emergency.", guestAction: "Stay clear of the pad and wait for staff or the next signal." },
+]
+
 export const wayfindingSchema = z.object({
   summary: z.string(),
   routes: z.array(
@@ -206,6 +216,29 @@ export const wayfindingSchema = z.object({
       notes: z.string(),
     }),
   ),
+  passengerJourney: z
+    .array(
+      z.object({
+        step: z.number().int().min(1).describe("1-based order of this step in the room-to-LandingPad journey."),
+        location: z.string().describe("Where the guest is at this step, e.g. 'Guest room floor', 'Lobby', 'East exit'."),
+        instruction: z.string().describe("Plain-language direction a hotel guest can follow."),
+        landmark: z.string().describe("A visible landmark that confirms the guest is on the right path."),
+        mode: z.enum(["walk", "elevator", "outdoor"]).describe("How the guest moves during this step."),
+        signalCue: z
+          .string()
+          .describe("What boarding signal the guest should look for / expect at this step, if any."),
+      }),
+    )
+    .describe("Ordered, step-by-step route a passenger walks from their room/start point to the robotaxi LandingPad, grounded in the interior survey and pickup zones."),
+  boardingSignals: z
+    .array(
+      z.object({
+        signal: z.enum(["blue", "amber", "green", "red"]),
+        meaning: z.string(),
+        guestAction: z.string().describe("What the guest should do when they see this signal."),
+      }),
+    )
+    .describe("Boarding-signal legend for this property: Blue en route, Amber get ready, Green flashing = board now, Red do not approach."),
   signage: z.array(
     z.object({
       type: z.enum(["beacon", "qr", "fiducial", "sign"]),

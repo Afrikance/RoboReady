@@ -6,10 +6,15 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { auditLog, membership, organization } from "@/lib/db/schema"
 
-export type Role = "owner" | "admin" | "member" | "client"
+export type Role = "owner" | "admin" | "member" | "operator" | "client"
 
+// Field Operators collect on-site survey data. They share the "member" rank so
+// existing `assertRole(ctx, "member")` gates (running intake/planners) keep
+// working unchanged; download gating in Settings uses explicit role checks, not
+// this hierarchy.
 const ROLE_RANK: Record<Role, number> = {
   client: 0,
+  operator: 1,
   member: 1,
   admin: 2,
   owner: 3,

@@ -8,6 +8,7 @@ const ROLE_LABEL: Record<string, string> = {
   owner: "Owner",
   admin: "Admin",
   member: "Member",
+  operator: "Field Operator",
   client: "Client",
 }
 
@@ -41,7 +42,8 @@ export default async function TeamPage() {
 
       <p className="text-xs text-muted-foreground">
         Inviting teammates and clients is coming in a later MVP. Roles today: owners and admins can approve AI output
-        and manage the workspace; members can run assessments; clients get read-only report access.
+        and manage the workspace; members can run assessments; field operators collect on-site survey data; clients get
+        read-only report access.
       </p>
     </div>
   )

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Building2, Bot, FileText, Users, Contact } from "lucide-react"
+import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings } from "lucide-react"
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -12,6 +12,7 @@ const NAV = [
   { href: "/dashboard/activity", label: "AI Activity", icon: Bot },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/team", label: "Team", icon: Users },
+  { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ]
 
 export function SidebarNav() {

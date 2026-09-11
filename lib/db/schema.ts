@@ -310,6 +310,8 @@ export const wayfindingPlan = pgTable("wayfinding_plan", {
   summary: text("summary"),
   routes: jsonb("routes"),
   signage: jsonb("signage"),
+  passengerJourney: jsonb("passengerJourney"),
+  boardingSignals: jsonb("boardingSignals"),
   version: integer("version").notNull().default(1),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),

@@ -98,6 +98,8 @@ export async function runWayfinding(propertyId: string): Promise<ActionResult<{ 
       summary: job.output.summary,
       routes: job.output.routes,
       signage: job.output.signage,
+      passengerJourney: job.output.passengerJourney,
+      boardingSignals: job.output.boardingSignals,
       version: prev + 1,
     })
 
