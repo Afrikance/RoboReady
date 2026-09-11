@@ -269,7 +269,103 @@ async function prefillIntoHandover(
   return { filled: filled.length, blank: leftBlank.length }
 }
 
-/** Manual re-run of AI pre-fill for a single staged prospect (e.g. a manual add). */
+/**
+ * Adds a known property by hand and runs it through the SAME flow as AI
+ * prospecting: insert as a prospect, hand to Scout for intake pre-fill, then
+ * advance to Field Work. Best-effort pre-fill — on AI failure the property
+ * still lands in Field Work so a human can complete it.
+ */
+export async function addManualProspect(input: {
+  name: string
+  propertyType: string
+  addressLine1?: string
+  city?: string
+  region?: string
+  postalCode?: string
+  phone?: string
+  latitude?: number | null
+  longitude?: number | null
+}): Promise<ActionResult<{ id: string; filled: number; blank: number }>> {
+  const ctx = await requireOrgContext()
+  try {
+    assertRole(ctx, "member")
+  } catch {
+    return { ok: false, error: "You do not have permission to add properties." }
+  }
+
+  const name = input.name?.trim()
+  if (!name || name.length < 2) return { ok: false, error: "Property name is required." }
+
+  const id = crypto.randomUUID()
+  const metadata: Record<string, unknown> = { pipeline: { source: "manual" } }
+
+  try {
+    await db.insert(property).values({
+      id,
+      organizationId: ctx.organizationId,
+      createdByUserId: ctx.user.id,
+      name,
+      propertyType: input.propertyType || "commercial",
+      addressLine1: input.addressLine1?.trim() || null,
+      city: input.city?.trim() || null,
+      region: input.region?.trim() || null,
+      postalCode: input.postalCode?.trim() || null,
+      phone: input.phone?.trim() || null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
+      status: "prospect",
+      metadata,
+    })
+
+    await recordAudit({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      action: "prospect.created",
+      entityType: "property",
+      entityId: id,
+      metadata: { name, source: "manual" },
+    })
+  } catch (err) {
+    console.log("[v0] addManualProspect insert failed:", (err as Error).message)
+    return { ok: false, error: "Could not add the property. Please try again." }
+  }
+
+  let filled = 0
+  let blank = 0
+  try {
+    const res = await prefillIntoHandover(ctx, {
+      id,
+      name,
+      propertyType: input.propertyType || "commercial",
+      city: input.city?.trim() || null,
+      region: input.region?.trim() || null,
+      country: null,
+      metadata,
+    })
+    filled = res.filled
+    blank = res.blank
+    await recordAudit({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      action: "prospect.prefilled",
+      entityType: "property",
+      entityId: id,
+      metadata: { filled, blank },
+    })
+  } catch (err) {
+    console.log("[v0] addManualProspect pre-fill failed for", name, (err as Error).message)
+    await db
+      .update(property)
+      .set({ status: "handover", updatedAt: new Date() })
+      .where(and(eq(property.id, id), eq(property.organizationId, ctx.organizationId)))
+  }
+
+  revalidatePath("/dashboard/properties/database")
+  revalidatePath("/dashboard/handover")
+  return { ok: true, data: { id, filled, blank } }
+}
+
+/** Manual re-run of AI pre-fill for a single staged prospect that stayed in the pool. */
 export async function prefillProperty(propertyId: string): Promise<ActionResult<{ filled: number; blank: number }>> {
   const ctx = await requireOrgContext()
   try {

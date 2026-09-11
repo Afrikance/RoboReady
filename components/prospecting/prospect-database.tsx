@@ -10,8 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { prospectProperties, prefillProperty } from "@/app/actions/prospecting"
-import { createProperty } from "@/app/actions/properties"
+import { prospectProperties, prefillProperty, addManualProspect } from "@/app/actions/prospecting"
 import {
   PROPERTY_TYPES,
   propertyTypeLabel,
@@ -228,7 +227,7 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
 
   function submit() {
     startTransition(async () => {
-      const res = await createProperty({
+      const res = await addManualProspect({
         name: form.name,
         propertyType: form.propertyType,
         addressLine1: form.addressLine1 || undefined,
@@ -238,10 +237,9 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
         phone: form.phone || undefined,
         latitude: form.latitude === "" ? null : Number(form.latitude),
         longitude: form.longitude === "" ? null : Number(form.longitude),
-        asProspect: true,
       })
       if (res.ok) {
-        toast.success("Added to the prospect database.")
+        toast.success(`Scout pre-filled ${res.data.filled} field(s) and sent it to Field Work.`)
         setForm({ name: "", propertyType: "hotel", addressLine1: "", city: "", region: "", postalCode: "", phone: "", latitude: "", longitude: "" })
         onDone()
       } else {
@@ -258,7 +256,9 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
         </span>
         <div>
           <h3 className="text-sm font-semibold">Add manually</h3>
-          <p className="text-xs text-muted-foreground">Enter a known property into the database.</p>
+          <p className="text-xs text-muted-foreground">
+            Enter a known property — Scout pre-fills the intake and sends it to Field Work.
+          </p>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
@@ -313,7 +313,8 @@ function ManualAddForm({ onDone }: { onDone: () => void }) {
         </div>
       </div>
       <Button onClick={submit} disabled={pending || form.name.trim().length < 2} variant="outline" className="w-full">
-        <Plus className="mr-1.5 h-4 w-4" /> {pending ? "Adding…" : "Add to database"}
+        <Plus className="mr-1.5 h-4 w-4" />{" "}
+        {pending ? "Adding & pre-filling…" : "Add & send to Field Work"}
       </Button>
     </div>
   )
