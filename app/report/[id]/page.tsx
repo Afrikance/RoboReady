@@ -20,7 +20,7 @@ export default async function ReportPrintPage({ params }: { params: Promise<{ id
         <div className="mb-6 flex justify-end print:hidden">
           <PrintTrigger auto />
         </div>
-        <ReportView ctx={ctx} />
+        <ReportView ctx={ctx} enforce />
         <footer className="mt-12 border-t border-border pt-4 text-center text-xs text-muted-foreground">
           Generated with RoboReady · {new Date().toLocaleDateString()}
         </footer>

@@ -6,7 +6,7 @@ import { db } from "@/lib/db"
 import { payment, property, proposal } from "@/lib/db/schema"
 import { assertRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
 import { stripe } from "@/lib/stripe"
-import { getProduct } from "@/lib/products"
+import { getAssessmentTier, tierRank, type AssessmentTierId } from "@/lib/products"
 import type { ActionResult } from "@/app/actions/properties"
 
 export type CheckoutStart = { clientSecret: string; paymentId: string }
@@ -18,13 +18,14 @@ export type CheckoutStart = { clientSecret: string; paymentId: string }
 async function createCheckout(args: {
   ctx: OrgContext
   kind: "assessment" | "proposal_deposit"
+  tier?: AssessmentTierId | null
   amountCents: number
   name: string
   description: string
   propertyId?: string | null
   proposalId?: string | null
 }): Promise<CheckoutStart> {
-  const { ctx, kind, amountCents, name, description, propertyId, proposalId } = args
+  const { ctx, kind, tier, amountCents, name, description, propertyId, proposalId } = args
   const paymentId = crypto.randomUUID()
 
   const session = await stripe.checkout.sessions.create(
@@ -55,6 +56,7 @@ async function createCheckout(args: {
     propertyId: propertyId ?? null,
     proposalId: proposalId ?? null,
     kind,
+    tier: tier ?? null,
     amountCents,
     currency: "usd",
     status: "pending",
@@ -65,7 +67,10 @@ async function createCheckout(args: {
   return { clientSecret: session.client_secret as string, paymentId }
 }
 
-export async function startAssessmentCheckout(propertyId: string): Promise<CheckoutStart> {
+export async function startAssessmentCheckout(
+  propertyId: string,
+  tierId: AssessmentTierId,
+): Promise<CheckoutStart> {
   const ctx = await requireOrgContext()
   assertRole(ctx, "member")
 
@@ -76,17 +81,42 @@ export async function startAssessmentCheckout(propertyId: string): Promise<Check
     .limit(1)
   if (!prop) throw new Error("Property not found.")
 
-  const product = getProduct("readiness-assessment")
-  if (!product) throw new Error("Product not configured.")
+  const tier = getAssessmentTier(tierId)
+  if (!tier) throw new Error("Unknown assessment tier.")
 
   return createCheckout({
     ctx,
     kind: "assessment",
-    amountCents: product.priceInCents,
-    name: product.name,
-    description: `${product.description} — ${prop.name}`,
+    tier: tier.id,
+    amountCents: tier.priceInCents,
+    name: `${tier.name} — ${prop.name}`,
+    description: tier.description,
     propertyId,
   })
+}
+
+/**
+ * The highest assessment tier a property has PAID for, or null. Drives which
+ * artifacts appear in the client-facing report/portal.
+ */
+export async function getPurchasedTier(propertyId: string): Promise<AssessmentTierId | null> {
+  const ctx = await requireOrgContext()
+  const rows = await db
+    .select({ tier: payment.tier })
+    .from(payment)
+    .where(
+      and(
+        eq(payment.propertyId, propertyId),
+        eq(payment.organizationId, ctx.organizationId),
+        eq(payment.kind, "assessment"),
+        eq(payment.status, "paid"),
+      ),
+    )
+  let best: AssessmentTierId | null = null
+  for (const r of rows) {
+    if (r.tier && tierRank(r.tier) > tierRank(best)) best = r.tier as AssessmentTierId
+  }
+  return best
 }
 
 export async function startDepositCheckout(proposalId: string): Promise<CheckoutStart> {

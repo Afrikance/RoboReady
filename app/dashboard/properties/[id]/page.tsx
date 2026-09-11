@@ -125,6 +125,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         assessment={assessment}
         intakeComplete={intakeComplete}
         unverifiedWarning={unverifiedWarning}
+        purchasedTier={reportCtx?.tier ?? null}
       />
     ),
     concept: <ConceptPanel concept={concept} />,

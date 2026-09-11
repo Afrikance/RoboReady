@@ -4,6 +4,7 @@ import { useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { generateReport } from "@/app/actions/report"
 import { ReportView, type ReportContext } from "@/components/report/report-view"
+import { TierStatus } from "@/components/assessment/tier-picker"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import { FileText, Loader2, Printer, Sparkles } from "lucide-react"
@@ -39,11 +40,12 @@ export function ReportPanel({ propertyId, ctx }: { propertyId: string; ctx: Repo
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">
-        <div>
+        <div className="space-y-1.5">
           <p className="text-sm font-medium">Client-ready report</p>
           <p className="text-xs text-muted-foreground">
             {ctx.report ? "Regenerate the narrative, print to PDF, or share with the client." : "Generate an AI narrative, then print or share."}
           </p>
+          <TierStatus purchasedTier={ctx.tier} />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={generate} disabled={pending}>

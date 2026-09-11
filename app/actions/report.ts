@@ -3,8 +3,9 @@
 import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
-import { assessment, siteConcept, infrastructureAsset, property, propertyPlan } from "@/lib/db/schema"
+import { assessment, siteConcept, infrastructureAsset, payment, property, propertyPlan } from "@/lib/db/schema"
 import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { reportFeaturesForTier, tierRank, type AssessmentTierId } from "@/lib/products"
 import { runJob } from "@/lib/ai/orchestrator"
 import type { ReportOutput } from "@/lib/ai/schemas"
 import type { ActionResult } from "@/app/actions/properties"
@@ -59,7 +60,27 @@ export async function buildReportContext(propertyId: string): Promise<ReportCont
   const meta = prop.metadata as Record<string, unknown> | null
   const report = (meta?.report as ReportContext["report"]) ?? null
 
+  // Highest assessment tier this property has PAID for → what the client is
+  // entitled to see in the report/portal.
+  const paidTiers = await db
+    .select({ tier: payment.tier })
+    .from(payment)
+    .where(
+      and(
+        eq(payment.propertyId, propertyId),
+        eq(payment.organizationId, ctx.organizationId),
+        eq(payment.kind, "assessment"),
+        eq(payment.status, "paid"),
+      ),
+    )
+  let purchasedTier: AssessmentTierId | null = null
+  for (const r of paidTiers) {
+    if (r.tier && tierRank(r.tier) > tierRank(purchasedTier)) purchasedTier = r.tier as AssessmentTierId
+  }
+
   return {
+    tier: purchasedTier,
+    entitled: [...reportFeaturesForTier(purchasedTier)],
     propertyName: prop.name,
     address: [prop.addressLine1, prop.city, prop.region, prop.country].filter(Boolean).join(", "),
     organizationName: ctx.organizationName,

@@ -293,6 +293,8 @@ export const payment = pgTable("payment", {
   proposalId: text("proposalId"),
   // assessment | proposal_deposit
   kind: text("kind").notNull(),
+  // For kind='assessment': which tier was bought (basic | standard | pro).
+  tier: text("tier"),
   amountCents: integer("amountCents").notNull(),
   currency: text("currency").notNull().default("usd"),
   // pending | paid | failed

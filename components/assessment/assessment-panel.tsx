@@ -1,17 +1,10 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
 import { RunAssessment } from "@/components/assessment/run-assessment"
-import { CheckoutDialog } from "@/components/checkout/checkout-dialog"
-import { startAssessmentCheckout } from "@/app/actions/payments"
-import { getProduct } from "@/lib/products"
+import { TierPicker } from "@/components/assessment/tier-picker"
+import type { AssessmentTierId } from "@/lib/products"
 import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, Lightbulb } from "lucide-react"
-
-function assessmentPriceLabel() {
-  const p = getProduct("readiness-assessment")
-  if (!p) return ""
-  return (p.priceInCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
-}
 
 const SEVERITY_STYLE: Record<string, string> = {
   high: "text-[var(--score-low)]",
@@ -72,31 +65,37 @@ export function AssessmentPanel({
   assessment,
   intakeComplete,
   unverifiedWarning = false,
+  purchasedTier = null,
 }: {
   propertyId: string
   assessment: Assessment | null
   intakeComplete: boolean
   /** Soft gate: true when the property is in the prospecting funnel but not yet admin-verified. */
   unverifiedWarning?: boolean
+  /** Highest report tier purchased for this property (gates the client report). */
+  purchasedTier?: AssessmentTierId | null
 }) {
   if (!assessment || assessment.roboReadyScore == null) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
-        {unverifiedWarning ? <div className="w-full max-w-md"><UnverifiedWarning /></div> : null}
-        <p className="text-sm font-medium">No assessment yet</p>
-        <p className="mb-5 mt-1 max-w-md text-sm text-muted-foreground text-pretty">
-          {intakeComplete
-            ? "Run the AI workforce to generate a RoboReady Score, findings, a site concept, and an infrastructure plan."
-            : "You can run an assessment now, but completing the intake first produces a much more accurate score."}
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <CheckoutDialog
-            start={startAssessmentCheckout.bind(null, propertyId)}
-            triggerLabel={`Purchase assessment · ${assessmentPriceLabel()}`}
-            title="Purchase RoboReady Assessment"
-            priceLabel={`One-time ${assessmentPriceLabel()} for a full autonomous-readiness assessment of this property.`}
-          />
+      <div className="space-y-6">
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-12 text-center">
+          {unverifiedWarning ? <div className="w-full max-w-md"><UnverifiedWarning /></div> : null}
+          <p className="text-sm font-medium">No assessment yet</p>
+          <p className="mb-5 mt-1 max-w-md text-sm text-muted-foreground text-pretty">
+            {intakeComplete
+              ? "Run the AI workforce to generate a RoboReady Score, findings, a site concept, and an infrastructure plan."
+              : "You can run an assessment now, but completing the intake first produces a much more accurate score."}
+          </p>
           <RunAssessment propertyId={propertyId} />
+        </div>
+        <div className="space-y-3">
+          <div>
+            <h3 className="text-sm font-semibold">Report package</h3>
+            <p className="text-xs text-muted-foreground text-pretty">
+              Choose what the client receives. The purchased tier controls which sections appear in their report and portal.
+            </p>
+          </div>
+          <TierPicker propertyId={propertyId} purchasedTier={purchasedTier} />
         </div>
       </div>
     )
@@ -227,10 +226,20 @@ export function AssessmentPanel({
                   <p className="mt-1 text-xs font-medium text-primary">{r.estimatedImpact}</p>
                 </li>
               ))}
-            </ul>
-          </section>
+          </ul>
+        </section>
         ) : null}
       </div>
+
+      <section className="space-y-3 border-t border-border pt-6">
+        <div>
+          <h3 className="text-sm font-semibold">Report package</h3>
+          <p className="text-xs text-muted-foreground text-pretty">
+            Choose what the client receives. The purchased tier controls which sections appear in their report and portal.
+          </p>
+        </div>
+        <TierPicker propertyId={propertyId} purchasedTier={purchasedTier} />
+      </section>
     </div>
   )
 }
