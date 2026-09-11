@@ -3,21 +3,82 @@ import { z } from "zod"
 // Note (per project memory): avoid array .max() bounds with Gemini structured
 // output — clamp lengths in code instead.
 
-export const SCORE_CATEGORIES = ["access", "connectivity", "layout", "goals"] as const
+// ---------------------------------------------------------------------------
+// RoboReady Readiness Score — canonical robotaxi/autonomous-arrival model
+// (master spec §5). A 100-point scale across 8 fixed-weight categories, built
+// entirely around the primary use case: autonomous robotaxi/CyberCab arrival.
+// Every category records its own points, explanation, evidence, and confidence
+// — the spec forbids a score without recorded reasoning inputs.
+// ---------------------------------------------------------------------------
+
+export const SCORE_CATEGORY_DEFS = [
+  { id: "curb", label: "Curb Readiness", max: 20 },
+  { id: "wayfinding", label: "Wayfinding", max: 15 },
+  { id: "accessibility", label: "Accessibility", max: 15 },
+  { id: "passenger", label: "Passenger Experience", max: 15 },
+  { id: "signage", label: "Signage", max: 10 },
+  { id: "infrastructure", label: "Infrastructure", max: 10 },
+  { id: "traffic", label: "Traffic / Pedestrian Flow", max: 10 },
+  { id: "future", label: "Future Expansion", max: 5 },
+] as const
+
+export const SCORE_CATEGORIES = [
+  "curb",
+  "wayfinding",
+  "accessibility",
+  "passenger",
+  "signage",
+  "infrastructure",
+  "traffic",
+  "future",
+] as const
 export type ScoreCategory = (typeof SCORE_CATEGORIES)[number]
 
+const CATEGORY_MAX: Record<ScoreCategory, number> = SCORE_CATEGORY_DEFS.reduce(
+  (acc, d) => ({ ...acc, [d.id]: d.max }),
+  {} as Record<ScoreCategory, number>,
+)
+
+/** The maximum points a category can contribute to the 100-point total. */
+export function scoreCategoryMax(id: string): number {
+  return CATEGORY_MAX[id as ScoreCategory] ?? 0
+}
+
+export function scoreCategoryLabel(id: string): string {
+  return SCORE_CATEGORY_DEFS.find((d) => d.id === id)?.label ?? id
+}
+
+export const CONFIDENCE_LEVELS = ["low", "medium", "high"] as const
+
 export const assessmentSchema = z.object({
-  roboReadyScore: z.number().int().min(0).max(100).describe("Overall 0-100 readiness score."),
+  roboReadyScore: z
+    .number()
+    .int()
+    .min(0)
+    .max(100)
+    .describe("Overall 0-100 readiness score. Must equal the sum of the category points."),
   scoreBreakdown: z
     .array(
       z.object({
         category: z.enum(SCORE_CATEGORIES),
-        score: z.number().int().min(0).max(100),
-        weight: z.number().min(0).max(1).describe("Fraction of the overall score, 0-1."),
-        rationale: z.string(),
+        points: z
+          .number()
+          .min(0)
+          .max(20)
+          .describe(
+            "Points awarded within this category's cap: Curb 20, Wayfinding 15, Accessibility 15, Passenger 15, Signage 10, Infrastructure 10, Traffic 10, Future 5.",
+          ),
+        explanation: z.string().describe("Why this many points — the reasoning for the robotaxi-arrival readiness of this category."),
+        evidence: z
+          .array(z.string())
+          .describe(
+            "The specific property inputs/observations this score is derived from. Never fabricate; if a fact is unknown, state that it is unknown.",
+          ),
+        confidence: z.enum(CONFIDENCE_LEVELS).describe("Confidence in this category score given the available evidence."),
+        recommendations: z.array(z.string()).describe("Concrete improvements that would raise this category's readiness."),
       }),
     )
-    .describe("One entry per category. Weights should sum to ~1."),
+    .describe("Exactly one entry per category — all 8 categories, in order."),
   findings: z
     .array(
       z.object({
@@ -37,14 +98,51 @@ export const assessmentSchema = z.object({
         estimatedImpact: z.string(),
       }),
     )
-    .describe("Prioritized, actionable recommendations."),
-  summary: z.string().describe("2-3 sentence executive summary of the readiness."),
+    .describe("Prioritized, actionable improvements to the property's robotaxi-arrival readiness."),
+  summary: z.string().describe("2-3 sentence executive summary of the autonomous-arrival readiness."),
 })
 export type AssessmentOutput = z.infer<typeof assessmentSchema>
 
+/**
+ * Deterministically computes the 0-100 RoboReady Score by clamping each
+ * category to its cap and summing. The model proposes points; the platform
+ * owns the arithmetic so the total is always exactly the sum of its parts.
+ */
+export function computeRoboReadyScore(
+  breakdown: Array<{ category: string; points: number }>,
+): { total: number; clamped: Array<{ category: string; points: number; max: number }> } {
+  const seen = new Set<string>()
+  const clamped: Array<{ category: string; points: number; max: number }> = []
+  for (const b of breakdown) {
+    if (seen.has(b.category)) continue
+    seen.add(b.category)
+    const max = scoreCategoryMax(b.category)
+    if (max === 0) continue
+    const points = Math.max(0, Math.min(max, Math.round(Number(b.points) || 0)))
+    clamped.push({ category: b.category, points, max })
+  }
+  const total = clamped.reduce((sum, c) => sum + c.points, 0)
+  return { total: Math.max(0, Math.min(100, total)), clamped }
+}
+
 export const siteConceptSchema = z.object({
   title: z.string(),
-  narrative: z.string().describe("A few paragraphs describing the concept."),
+  narrative: z.string().describe("A few paragraphs describing the autonomous-arrival concept for this property."),
+  pickupZones: z
+    .array(
+      z.object({
+        role: z
+          .enum(["primary", "overflow", "accessible"])
+          .describe("primary = main robotaxi/CyberCab pickup & drop-off; overflow = secondary/surge zone; accessible = wheelchair-accessible boarding."),
+        name: z.string().describe("e.g. 'LandingPad 01 — Primary Robotaxi Pickup'."),
+        location: z.string().describe("Where on the property, relative to the main entrance, curb, and parking."),
+        rationale: z.string().describe("Why this location suits autonomous vehicle pickup/drop-off."),
+        conflicts: z
+          .string()
+          .describe("Potential conflicts with vehicle traffic, pedestrian flow, existing rideshare zones, loading, or emergency access."),
+      }),
+    )
+    .describe("Recommended robotaxi arrival zones. Always include a primary pickup zone and an accessible boarding zone."),
   zones: z.array(
     z.object({
       name: z.string(),

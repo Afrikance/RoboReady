@@ -210,6 +210,7 @@ export const siteConcept = pgTable("site_concept", {
   title: text("title").notNull(),
   narrative: text("narrative"),
   zones: jsonb("zones"),
+  pickupZones: jsonb("pickupZones"),
   imageUrl: text("imageUrl"),
   version: integer("version").notNull().default(1),
   status: text("status").notNull().default("draft"),

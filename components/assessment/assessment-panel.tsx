@@ -3,6 +3,7 @@ import { RunAssessment } from "@/components/assessment/run-assessment"
 import { CheckoutDialog } from "@/components/checkout/checkout-dialog"
 import { startAssessmentCheckout } from "@/app/actions/payments"
 import { getProduct } from "@/lib/products"
+import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, Lightbulb } from "lucide-react"
 
@@ -12,13 +13,6 @@ function assessmentPriceLabel() {
   return (p.priceInCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  access: "Access & Circulation",
-  connectivity: "Connectivity & Power",
-  layout: "Layout & Environment",
-  goals: "Automation Goals",
-}
-
 const SEVERITY_STYLE: Record<string, string> = {
   high: "text-[var(--score-low)]",
   medium: "text-[var(--score-mid)]",
@@ -26,6 +20,27 @@ const SEVERITY_STYLE: Record<string, string> = {
 }
 
 const PRIORITY_LABEL: Record<string, string> = { now: "Now", next: "Next", later: "Later" }
+const CONFIDENCE_LABEL: Record<string, string> = { high: "High confidence", medium: "Medium confidence", low: "Low confidence" }
+
+type CategoryScore = {
+  category: string
+  points?: number
+  max?: number
+  explanation?: string
+  evidence?: string[]
+  confidence?: string
+  recommendations?: string[]
+  // legacy shape
+  score?: number
+  rationale?: string
+}
+
+/** Percentage of a category's cap that was awarded, for the progress bar. */
+function categoryPct(b: CategoryScore): number {
+  const max = b.max ?? scoreCategoryMax(b.category)
+  if (max > 0 && b.points != null) return Math.round((b.points / max) * 100)
+  return b.score ?? 0
+}
 
 type Assessment = {
   roboReadyScore: number | null
@@ -68,7 +83,7 @@ export function AssessmentPanel({
     )
   }
 
-  const breakdown = (assessment.scoreBreakdown as Array<{ category: string; score: number; rationale: string }>) ?? []
+  const breakdown = (assessment.scoreBreakdown as CategoryScore[]) ?? []
   const findings = (assessment.findings as Array<{ title: string; severity: string; detail: string }>) ?? []
   const recommendations =
     (assessment.recommendations as Array<{ title: string; priority: string; detail: string; estimatedImpact: string }>) ??
@@ -92,25 +107,63 @@ export function AssessmentPanel({
 
       {breakdown.length > 0 ? (
         <section className="space-y-3">
-          <h3 className="text-sm font-semibold">Category breakdown</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Readiness categories</h3>
+            <span className="text-xs text-muted-foreground">Autonomous-arrival score · 100 pts</span>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            {breakdown.map((b) => (
-              <div key={b.category} className="rounded-lg border border-border bg-card p-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{CATEGORY_LABELS[b.category] ?? b.category}</span>
-                  <span className="text-sm font-semibold tabular-nums" style={{ color: `var(--score-${scoreBand(b.score)})` }}>
-                    {b.score}
-                  </span>
+            {breakdown.map((b) => {
+              const pct = categoryPct(b)
+              const max = b.max ?? scoreCategoryMax(b.category)
+              const pointsLabel = b.points != null && max > 0 ? `${b.points} / ${max}` : `${b.score ?? 0}`
+              const detail = b.explanation ?? b.rationale
+              const evidence = b.evidence ?? []
+              const recs = b.recommendations ?? []
+              return (
+                <div key={b.category} className="rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-pretty">{scoreCategoryLabel(b.category)}</span>
+                    <span
+                      className="shrink-0 text-sm font-semibold tabular-nums"
+                      style={{ color: `var(--score-${scoreBand(pct)})` }}
+                    >
+                      {pointsLabel}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div
+                      className="h-full rounded-full"
+                      style={{ width: `${pct}%`, background: `var(--score-${scoreBand(pct)})` }}
+                    />
+                  </div>
+                  {detail ? <p className="mt-2 text-xs text-muted-foreground text-pretty">{detail}</p> : null}
+                  {evidence.length > 0 ? (
+                    <div className="mt-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Evidence</p>
+                      <ul className="mt-1 space-y-0.5">
+                        {evidence.map((e, i) => (
+                          <li key={i} className="flex gap-1.5 text-xs text-muted-foreground text-pretty">
+                            <span aria-hidden className="text-primary">·</span>
+                            <span>{e}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+                  {recs.length > 0 ? (
+                    <p className="mt-2 text-xs text-pretty">
+                      <span className="font-medium text-primary">To improve: </span>
+                      <span className="text-muted-foreground">{recs.join("; ")}</span>
+                    </p>
+                  ) : null}
+                  {b.confidence ? (
+                    <Badge variant="outline" className="mt-3 text-[10px]">
+                      {CONFIDENCE_LABEL[b.confidence] ?? b.confidence}
+                    </Badge>
+                  ) : null}
                 </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${b.score}%`, background: `var(--score-${scoreBand(b.score)})` }}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground text-pretty">{b.rationale}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       ) : null}

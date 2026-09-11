@@ -6,10 +6,11 @@ import { db } from "@/lib/db"
 import { assessment, property, siteConcept, infrastructureAsset } from "@/lib/db/schema"
 import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { runJob } from "@/lib/ai/orchestrator"
-import type {
-  AssessmentOutput,
-  SiteConceptOutput,
-  InfrastructurePlanOutput,
+import {
+  computeRoboReadyScore,
+  type AssessmentOutput,
+  type SiteConceptOutput,
+  type InfrastructurePlanOutput,
 } from "@/lib/ai/schemas"
 import { getIntake } from "@/app/actions/intake"
 import type { ActionResult } from "@/app/actions/properties"
@@ -83,6 +84,17 @@ export async function runAssessment(propertyId: string): Promise<ActionResult<{ 
       input: context,
     })
 
+    // The platform owns the arithmetic: clamp each category to its cap and sum
+    // to a deterministic 0-100 total, so the RoboReady Score always equals the
+    // sum of its parts regardless of what the model reports for the overall.
+    const { total, clamped } = computeRoboReadyScore(assess.output.scoreBreakdown ?? [])
+    const capByCategory = new Map(clamped.map((c) => [c.category, c]))
+    const persistedBreakdown = (assess.output.scoreBreakdown ?? []).map((b) => ({
+      ...b,
+      points: capByCategory.get(b.category)?.points ?? Math.round(Number(b.points) || 0),
+      max: capByCategory.get(b.category)?.max ?? undefined,
+    }))
+
     const prevVersion = (await getLatestAssessment(propertyId))?.version ?? 0
     const assessmentId = crypto.randomUUID()
     await db.insert(assessment).values({
@@ -92,8 +104,8 @@ export async function runAssessment(propertyId: string): Promise<ActionResult<{ 
       createdByUserId: ctx.user.id,
       aiJobId: assess.jobId,
       status: "completed",
-      roboReadyScore: assess.output.roboReadyScore,
-      scoreBreakdown: assess.output.scoreBreakdown,
+      roboReadyScore: total,
+      scoreBreakdown: persistedBreakdown,
       findings: assess.output.findings,
       recommendations: assess.output.recommendations,
       summary: assess.output.summary,
@@ -120,6 +132,7 @@ export async function runAssessment(propertyId: string): Promise<ActionResult<{ 
       title: concept.output.title,
       narrative: concept.output.narrative,
       zones: concept.output.zones,
+      pickupZones: concept.output.pickupZones ?? [],
       version: prevConceptVersion + 1,
       status: "draft",
     })
@@ -159,13 +172,13 @@ export async function runAssessment(propertyId: string): Promise<ActionResult<{ 
       action: "assessment.completed",
       entityType: "assessment",
       entityId: assessmentId,
-      metadata: { score: assess.output.roboReadyScore },
+      metadata: { score: total },
     })
 
     revalidatePath(`/dashboard/properties/${propertyId}`)
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/activity")
-    return { ok: true, data: { score: assess.output.roboReadyScore } }
+    return { ok: true, data: { score: total } }
   } catch (err) {
     console.log("[v0] runAssessment failed:", (err as Error).message)
     return { ok: false, error: "The assessment could not be completed. Please try again." }

@@ -1,11 +1,5 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
-
-const CATEGORY_LABELS: Record<string, string> = {
-  access: "Access & Circulation",
-  connectivity: "Connectivity & Power",
-  layout: "Layout & Environment",
-  goals: "Automation Goals",
-}
+import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
 
 export type ReportData = {
   headline: string
@@ -21,7 +15,18 @@ export type ReportContext = {
   organizationName: string
   score: number | null
   scoreSummary: string | null
-  breakdown: Array<{ category: string; score: number; rationale: string }>
+  breakdown: Array<{
+    category: string
+    points?: number
+    max?: number
+    explanation?: string
+    evidence?: string[]
+    confidence?: string
+    recommendations?: string[]
+    // legacy shape
+    score?: number
+    rationale?: string
+  }>
   findings: Array<{ title: string; severity: string; detail: string }>
   recommendations: Array<{ title: string; priority: string; detail: string; estimatedImpact: string }>
   conceptTitle: string | null
@@ -64,20 +69,26 @@ export function ReportView({ ctx }: { ctx: ReportContext }) {
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Readiness by category</h2>
           <div className="space-y-3">
-            {ctx.breakdown.map((b) => (
-              <div key={b.category}>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="font-medium">{CATEGORY_LABELS[b.category] ?? b.category}</span>
-                  <span className="tabular-nums" style={{ color: `var(--score-${scoreBand(b.score)})` }}>
-                    {b.score}/100
-                  </span>
+            {ctx.breakdown.map((b) => {
+              const max = b.max ?? scoreCategoryMax(b.category)
+              const pct = max > 0 && b.points != null ? Math.round((b.points / max) * 100) : (b.score ?? 0)
+              const pointsLabel = b.points != null && max > 0 ? `${b.points}/${max}` : `${b.score ?? 0}/100`
+              const detail = b.explanation ?? b.rationale
+              return (
+                <div key={b.category}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium">{scoreCategoryLabel(b.category)}</span>
+                    <span className="tabular-nums" style={{ color: `var(--score-${scoreBand(pct)})` }}>
+                      {pointsLabel}
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                    <div className="h-full rounded-full" style={{ width: `${pct}%`, background: `var(--score-${scoreBand(pct)})` }} />
+                  </div>
+                  {detail ? <p className="mt-1 text-xs text-muted-foreground text-pretty">{detail}</p> : null}
                 </div>
-                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                  <div className="h-full rounded-full" style={{ width: `${b.score}%`, background: `var(--score-${scoreBand(b.score)})` }} />
-                </div>
-                <p className="mt-1 text-xs text-muted-foreground text-pretty">{b.rationale}</p>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       ) : null}
