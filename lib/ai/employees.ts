@@ -10,6 +10,11 @@ export type EmployeeSlug =
   | "site-designer"
   | "infrastructure-planner"
   | "report-writer"
+  | "sales-qualifier"
+  | "wayfinding-planner"
+  | "accessibility-auditor"
+  | "ev-planner"
+  | "proposal-writer"
 
 export type AIEmployee = {
   slug: EmployeeSlug
@@ -56,6 +61,52 @@ export const AI_EMPLOYEES: Record<EmployeeSlug, AIEmployee> = {
     department: "Marketing",
     mission:
       "Compose a clear, client-ready narrative report from the assessment, site concept, and infrastructure plan.",
+    requiresApproval: false,
+  },
+  "sales-qualifier": {
+    slug: "sales-qualifier",
+    name: "Mercer",
+    title: "Sales Qualifier",
+    department: "Sales",
+    mission:
+      "Qualify inbound leads for autonomous-readiness services: score fit, infer likely needs and budget band, and recommend next actions so the team focuses on the best opportunities.",
+    requiresApproval: false,
+  },
+  "wayfinding-planner": {
+    slug: "wayfinding-planner",
+    name: "Patha",
+    title: "Wayfinding Planner",
+    department: "Design",
+    mission:
+      "Design robot and drone circulation: named routes between key zones, turning/clearance needs, and machine-readable signage/beacon placement so autonomous systems can navigate the property.",
+    requiresApproval: false,
+  },
+  "accessibility-auditor": {
+    slug: "accessibility-auditor",
+    name: "Vera",
+    title: "Accessibility Auditor",
+    department: "Operations",
+    mission:
+      "Audit the property against accessibility expectations (ADA-style) as they intersect with autonomous operations, flagging every finding that must be confirmed by a licensed professional.",
+    // Accessibility/compliance output must be verified by a professional.
+    requiresApproval: true,
+  },
+  "ev-planner": {
+    slug: "ev-planner",
+    name: "Volt",
+    title: "EV Charging Planner",
+    department: "Engineering",
+    mission:
+      "Plan EV and robot charging: recommend station mix and counts, estimate electrical load and any service-upgrade needs, and give indicative costs.",
+    requiresApproval: false,
+  },
+  "proposal-writer": {
+    slug: "proposal-writer",
+    name: "Sable",
+    title: "Proposal Writer",
+    department: "Sales",
+    mission:
+      "Turn a property's assessment and plans into a persuasive, itemized commercial proposal with a clear scope, line items, and pricing.",
     requiresApproval: false,
   },
 }

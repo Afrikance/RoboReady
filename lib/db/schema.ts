@@ -234,3 +234,114 @@ export const infrastructureAsset = pgTable("infrastructure_asset", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// MVP 2: CRM, proposals, payments, and additional AI planners
+// ---------------------------------------------------------------------------
+
+export const lead = pgTable("lead", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  ownerUserId: text("ownerUserId"),
+  company: text("company").notNull(),
+  contactName: text("contactName"),
+  contactEmail: text("contactEmail"),
+  contactPhone: text("contactPhone"),
+  source: text("source").notNull().default("manual"),
+  // new | qualifying | qualified | proposal | won | lost
+  stage: text("stage").notNull().default("new"),
+  estimatedValue: numeric("estimatedValue", { precision: 12, scale: 2 }),
+  notes: text("notes"),
+  qualification: jsonb("qualification"),
+  qualificationJobId: text("qualificationJobId"),
+  linkedPropertyId: text("linkedPropertyId"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+export const proposal = pgTable("proposal", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  title: text("title").notNull(),
+  summary: text("summary"),
+  lineItems: jsonb("lineItems").notNull().default([]),
+  subtotalCents: integer("subtotalCents").notNull().default(0),
+  depositRate: numeric("depositRate", { precision: 4, scale: 3 }).notNull().default("0.100"),
+  depositCents: integer("depositCents").notNull().default(0),
+  currency: text("currency").notNull().default("usd"),
+  // draft | sent | accepted | deposit_paid
+  status: text("status").notNull().default("draft"),
+  aiJobId: text("aiJobId"),
+  version: integer("version").notNull().default(1),
+  acceptedAt: timestamp("acceptedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+export const payment = pgTable("payment", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  propertyId: text("propertyId"),
+  proposalId: text("proposalId"),
+  // assessment | proposal_deposit
+  kind: text("kind").notNull(),
+  amountCents: integer("amountCents").notNull(),
+  currency: text("currency").notNull().default("usd"),
+  // pending | paid | failed
+  status: text("status").notNull().default("pending"),
+  stripeSessionId: text("stripeSessionId"),
+  stripePaymentIntentId: text("stripePaymentIntentId"),
+  description: text("description"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+export const wayfindingPlan = pgTable("wayfinding_plan", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  aiJobId: text("aiJobId"),
+  summary: text("summary"),
+  routes: jsonb("routes"),
+  signage: jsonb("signage"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+export const accessibilityAudit = pgTable("accessibility_audit", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  aiJobId: text("aiJobId"),
+  score: integer("score"),
+  summary: text("summary"),
+  findings: jsonb("findings"),
+  requiresVerification: boolean("requiresVerification").notNull().default(true),
+  verifiedByUserId: text("verifiedByUserId"),
+  verifiedAt: timestamp("verifiedAt"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+export const evPlan = pgTable("ev_plan", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  aiJobId: text("aiJobId"),
+  summary: text("summary"),
+  stations: jsonb("stations"),
+  loadSummary: jsonb("loadSummary"),
+  totalCostCents: integer("totalCostCents"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})

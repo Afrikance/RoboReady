@@ -14,6 +14,14 @@ import { getLatestAssessment, getLatestConcept } from "@/app/actions/assessment"
 import { listAssets } from "@/app/actions/assets"
 import { buildReportContext } from "@/app/actions/report"
 import { ReportPanel } from "@/components/report/report-panel"
+import { WayfindingPanel } from "@/components/wayfinding/wayfinding-panel"
+import { AccessibilityPanel } from "@/components/accessibility/accessibility-panel"
+import { EvPanel } from "@/components/ev/ev-panel"
+import { ProposalPanel } from "@/components/proposal/proposal-panel"
+import { getWayfinding, getAccessibility, getEvPlan } from "@/app/actions/planners"
+import { getLatestProposal } from "@/app/actions/proposals"
+import { listPayments } from "@/app/actions/payments"
+import { getOrgContext } from "@/lib/tenancy"
 import { intakeCompletion } from "@/lib/intake/questions"
 import { Badge } from "@/components/ui/badge"
 
@@ -32,17 +40,26 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const property = await getProperty(id)
   if (!property) notFound()
 
-  const [intake, docs, assessment, concept, assets, reportCtx] = await Promise.all([
-    getIntake(id),
-    listDocuments(id),
-    getLatestAssessment(id),
-    getLatestConcept(id),
-    listAssets(id),
-    buildReportContext(id),
-  ])
+  const [intake, docs, assessment, concept, assets, reportCtx, wayfinding, accessibility, ev, proposal, payments, ctx] =
+    await Promise.all([
+      getIntake(id),
+      listDocuments(id),
+      getLatestAssessment(id),
+      getLatestConcept(id),
+      listAssets(id),
+      buildReportContext(id),
+      getWayfinding(id),
+      getAccessibility(id),
+      getEvPlan(id),
+      getLatestProposal(id),
+      listPayments(id),
+      getOrgContext(),
+    ])
   const intakeAnswers = (intake?.answers as Record<string, unknown>) ?? {}
   const completion = intakeCompletion(intakeAnswers)
   const intakeComplete = intake?.status === "completed"
+  const assessmentReady = assessment?.roboReadyScore != null
+  const canVerify = ctx ? ctx.role === "owner" || ctx.role === "admin" : false
 
   const address = [property.addressLine1, property.city, property.region, property.country]
     .filter(Boolean)
@@ -55,6 +72,10 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     { id: "assessment", label: "Assessment", badge: assessment?.roboReadyScore != null ? String(assessment.roboReadyScore) : undefined },
     { id: "concept", label: "Site concept" },
     { id: "assets", label: "Infrastructure", badge: assets.length ? String(assets.length) : undefined },
+    { id: "wayfinding", label: "Wayfinding" },
+    { id: "accessibility", label: "Accessibility", badge: accessibility?.score != null ? String(accessibility.score) : undefined },
+    { id: "ev", label: "EV charging" },
+    { id: "proposal", label: "Proposal", badge: proposal ? `v${proposal.version}` : undefined },
     { id: "report", label: "Report" },
   ]
 
@@ -82,6 +103,12 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
           unitCost: a.unitCost,
         }))}
       />
+    ),
+    wayfinding: <WayfindingPanel propertyId={id} plan={wayfinding} />,
+    accessibility: <AccessibilityPanel propertyId={id} audit={accessibility} canVerify={canVerify} />,
+    ev: <EvPanel propertyId={id} plan={ev} />,
+    proposal: (
+      <ProposalPanel propertyId={id} proposal={proposal} payments={payments} assessmentReady={assessmentReady} />
     ),
     report: reportCtx ? <ReportPanel propertyId={id} ctx={reportCtx} /> : null,
   }

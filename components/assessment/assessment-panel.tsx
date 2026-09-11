@@ -1,7 +1,16 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
 import { RunAssessment } from "@/components/assessment/run-assessment"
+import { CheckoutDialog } from "@/components/checkout/checkout-dialog"
+import { startAssessmentCheckout } from "@/app/actions/payments"
+import { getProduct } from "@/lib/products"
 import { Badge } from "@/components/ui/badge"
 import { AlertTriangle, Lightbulb } from "lucide-react"
+
+function assessmentPriceLabel() {
+  const p = getProduct("readiness-assessment")
+  if (!p) return ""
+  return (p.priceInCents / 100).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })
+}
 
 const CATEGORY_LABELS: Record<string, string> = {
   access: "Access & Circulation",
@@ -46,7 +55,15 @@ export function AssessmentPanel({
             ? "Run the AI workforce to generate a RoboReady Score, findings, a site concept, and an infrastructure plan."
             : "You can run an assessment now, but completing the intake first produces a much more accurate score."}
         </p>
-        <RunAssessment propertyId={propertyId} />
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <CheckoutDialog
+            start={startAssessmentCheckout.bind(null, propertyId)}
+            triggerLabel={`Purchase assessment · ${assessmentPriceLabel()}`}
+            title="Purchase RoboReady Assessment"
+            priceLabel={`One-time ${assessmentPriceLabel()} for a full autonomous-readiness assessment of this property.`}
+          />
+          <RunAssessment propertyId={propertyId} />
+        </div>
       </div>
     )
   }

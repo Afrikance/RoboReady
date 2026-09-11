@@ -9,6 +9,11 @@ import {
   siteConceptSchema,
   infrastructurePlanSchema,
   reportSchema,
+  leadQualificationSchema,
+  wayfindingSchema,
+  accessibilitySchema,
+  evPlanSchema,
+  proposalSchema,
 } from "@/lib/ai/schemas"
 
 const MODEL = "google/gemini-3.5-flash"
@@ -34,6 +39,31 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
     schema: reportSchema,
     instructions:
       "Write a clear, client-ready report from the assessment, site concept, and infrastructure plan. Professional but readable; no jargon dumps.",
+  },
+  "lead-qualification": {
+    schema: leadQualificationSchema,
+    instructions:
+      "Qualify this sales lead for autonomous-readiness services. Score fit 0-100, rate hot/warm/cold, infer a budget band and likely needs, and recommend concrete next actions. Ground everything in the lead details provided; if information is thin, say so and lean cold.",
+  },
+  wayfinding: {
+    schema: wayfindingSchema,
+    instructions:
+      "Design robot/drone circulation for this property: named routes between key zones with clearance requirements, plus machine-readable signage/beacon placements. Ground it in the property's real layout and assessment.",
+  },
+  accessibility: {
+    schema: accessibilitySchema,
+    instructions:
+      "Audit this property for accessibility as it intersects with autonomous operations. Produce a 0-100 score and specific findings by area with severity and recommendations. Set needsProfessionalVerification=true for anything that legally or practically requires a licensed professional to confirm — err toward flagging.",
+  },
+  "ev-plan": {
+    schema: evPlanSchema,
+    instructions:
+      "Plan EV and robot charging for this property. Recommend a realistic station mix and counts, estimate peak electrical load and whether a service upgrade is likely, and give indicative installed unit costs in USD. Only recommend what the property's scale and goals justify.",
+  },
+  proposal: {
+    schema: proposalSchema,
+    instructions:
+      "Write a persuasive, itemized commercial proposal from the property's assessment and plans. Include a compelling summary and clear line items with realistic USD unit prices. Do not invent work the plans don't support.",
   },
 }
 

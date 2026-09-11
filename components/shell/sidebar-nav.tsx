@@ -3,12 +3,13 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Building2, Bot, FileText, Users } from "lucide-react"
+import { LayoutDashboard, Building2, Bot, FileText, Users, Contact } from "lucide-react"
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/dashboard/leads", label: "Leads", icon: Contact },
   { href: "/dashboard/properties", label: "Properties", icon: Building2 },
-  { href: "/dashboard/ai", label: "AI Activity", icon: Bot },
+  { href: "/dashboard/activity", label: "AI Activity", icon: Bot },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/team", label: "Team", icon: Users },
 ]
