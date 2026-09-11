@@ -103,21 +103,45 @@ export function PlanSchematic({
         />
       ) : null}
 
-      {/* markers */}
-      {safeMarkers.map((m, i) => (
-        <g key={i}>
-          <circle cx={m.x} cy={m.y} r={1.6} fill="var(--primary)" stroke="var(--background)" strokeWidth={0.4} />
-          <text
-            x={m.x + 2.4}
-            y={m.y + 0.8}
-            fontSize={2.3}
-            fill="var(--primary)"
-            fontWeight={600}
-          >
-            {m.label.length > 24 ? `${m.label.slice(0, 23)}…` : m.label}
-          </text>
-        </g>
-      ))}
+      {/* markers — labels are stacked with vertical offsets so nearby markers
+          (e.g. several points along one route) don't collide, and each label
+          carries a light halo stroke to stay legible over the diagram. */}
+      {safeMarkers.map((m, i) => {
+        const label = m.label.length > 24 ? `${m.label.slice(0, 23)}…` : m.label
+        // Alternate above/below and step outward by index to fan out clusters.
+        const below = i % 2 === 1
+        const step = Math.floor(i / 2)
+        const dy = (below ? 3.4 : -2.6) + (below ? 1 : -1) * step * 3.2
+        const ty = clamp(m.y + dy, 3, 98)
+        const anchorRight = m.x > 78
+        return (
+          <g key={i}>
+            <line
+              x1={m.x}
+              y1={m.y}
+              x2={m.x}
+              y2={ty - (below ? 1.6 : -1.6)}
+              stroke="var(--primary)"
+              strokeWidth={0.25}
+              opacity={0.5}
+            />
+            <circle cx={m.x} cy={m.y} r={1.4} fill="var(--primary)" stroke="var(--background)" strokeWidth={0.4} />
+            <text
+              x={anchorRight ? m.x - 0.4 : m.x + 0.4}
+              y={ty}
+              textAnchor={anchorRight ? "end" : "start"}
+              fontSize={2.2}
+              fontWeight={600}
+              fill="var(--primary)"
+              stroke="var(--background)"
+              strokeWidth={0.6}
+              paintOrder="stroke"
+            >
+              {label}
+            </text>
+          </g>
+        )
+      })}
     </svg>
   )
 }
