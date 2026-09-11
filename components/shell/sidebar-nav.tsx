@@ -3,14 +3,17 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings } from "lucide-react"
+import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings, DatabaseZap, ClipboardList, BadgeCheck } from "lucide-react"
 import { canUseNavHref } from "@/lib/access"
 import type { Role } from "@/lib/tenancy"
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
   { href: "/dashboard/leads", label: "Leads", icon: Contact },
+  { href: "/dashboard/properties/database", label: "Prospect DB", icon: DatabaseZap, exact: true },
   { href: "/dashboard/properties", label: "Properties", icon: Building2 },
+  { href: "/dashboard/handover", label: "Field Work", icon: ClipboardList },
+  { href: "/dashboard/verification", label: "Verification", icon: BadgeCheck },
   { href: "/dashboard/activity", label: "AI Activity", icon: Bot },
   { href: "/dashboard/reports", label: "Reports", icon: FileText },
   { href: "/dashboard/team", label: "Team", icon: Users },
@@ -21,10 +24,17 @@ export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname()
   const items = NAV.filter((item) => canUseNavHref(role, item.href))
 
+  // Highlight exactly one item: the one whose href is the longest prefix of the
+  // current path. This keeps "Properties" from also lighting up on the nested
+  // "Prospect DB" route (/dashboard/properties/database).
+  const activeHref = items
+    .filter((item) => (item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(`${item.href}/`)))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href
+
   return (
     <nav className="flex flex-col gap-1 px-3 py-2" aria-label="Primary">
       {items.map((item) => {
-        const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+        const active = item.href === activeHref
         const Icon = item.icon
         return (
           <Link

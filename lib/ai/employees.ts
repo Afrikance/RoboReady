@@ -15,6 +15,8 @@ export type EmployeeSlug =
   | "accessibility-auditor"
   | "ev-planner"
   | "proposal-writer"
+  | "property-prospector"
+  | "intake-prefiller"
 
 export type AIEmployee = {
   slug: EmployeeSlug
@@ -107,6 +109,24 @@ export const AI_EMPLOYEES: Record<EmployeeSlug, AIEmployee> = {
     department: "Sales",
     mission:
       "Turn a property's assessment and plans into a persuasive, itemized commercial proposal with a clear scope, line items, and pricing.",
+    requiresApproval: false,
+  },
+  "property-prospector": {
+    slug: "property-prospector",
+    name: "Scout",
+    title: "Property Prospector",
+    department: "Sales",
+    mission:
+      "Build a prospect pipeline: identify candidate commercial properties (hotels, apartment complexes, schools, business parks, shopping centers, hospitals, event venues) in a target market with best-effort contact details, clearly flagged as unverified for a human to confirm.",
+    requiresApproval: false,
+  },
+  "intake-prefiller": {
+    slug: "intake-prefiller",
+    name: "Vero",
+    title: "Intake Pre-Filler",
+    department: "Operations",
+    mission:
+      "Pre-fill a property's intake with only the information that is confidently verifiable from public knowledge, and leave everything uncertain blank for the field operator — never guessing on-site measurements.",
     requiresApproval: false,
   },
 }

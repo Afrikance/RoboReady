@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Check, Lock, Save } from "lucide-react"
+import { Check, Lock, Save, Sparkles, MapPin, BadgeCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Answers = Record<string, unknown>
@@ -19,12 +19,18 @@ export function IntakeForm({
   initialAnswers,
   initialStatus,
   isAdmin = false,
+  propertyStatus,
+  prefill,
 }: {
   propertyId: string
   initialAnswers: Answers
   initialStatus: string
   /** Admins/owners can edit a submitted intake; everyone else is view-only once it is locked. */
   isAdmin?: boolean
+  /** The property's funnel status, used to tailor the field-work submit flow. */
+  propertyStatus?: string
+  /** Which fields the AI pre-filled vs left blank for the field operator. */
+  prefill?: { filled: string[]; leftBlank: string[] }
 }) {
   const [answers, setAnswers] = useState<Answers>(initialAnswers ?? {})
   const [pending, startTransition] = useTransition()
@@ -34,6 +40,12 @@ export function IntakeForm({
   // full edit access so they can correct or reopen it.
   const locked = status === "completed"
   const readOnly = locked && !isAdmin
+
+  // Field-work handover: this property was handed over for on-site completion.
+  const inHandover = propertyStatus === "handover"
+  const inVerification = propertyStatus === "pending_verification"
+  const filledSet = new Set(prefill?.filled ?? [])
+  const blankSet = new Set(prefill?.leftBlank ?? [])
 
   const completion = intakeCompletion(answers)
 
@@ -115,6 +127,32 @@ export function IntakeForm({
         </div>
       ) : null}
 
+      {inVerification ? (
+        <div className="flex items-start gap-3 rounded-lg border border-[var(--score-mid)]/40 bg-[var(--score-mid)]/10 p-4">
+          <BadgeCheck className="mt-0.5 h-4 w-4 shrink-0 text-[var(--score-mid)]" />
+          <div>
+            <p className="text-sm font-medium">In verification</p>
+            <p className="text-xs text-muted-foreground text-pretty">
+              Submitted to the admin verification queue. An admin will verify it or return it for more field work.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      {inHandover && !readOnly ? (
+        <div className="flex items-start gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+          <div>
+            <p className="text-sm font-medium">Field work needed</p>
+            <p className="text-xs text-muted-foreground text-pretty">
+              An AI pre-filled the fields it could verify (marked <span className="font-medium text-primary">AI</span>).
+              Complete the fields marked <span className="font-medium text-[var(--score-mid)]">Needs field data</span> on
+              site, then submit for admin verification.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {INTAKE_SECTIONS.map((section) => (
         <section key={section.id} className="space-y-4">
           <div>
@@ -128,6 +166,7 @@ export function IntakeForm({
                 field={field}
                 value={answers[field.id]}
                 readOnly={readOnly}
+                hint={filledSet.has(field.id) ? "ai" : blankSet.has(field.id) ? "blank" : undefined}
                 onChange={(v) => set(field.id, v)}
                 onToggleMulti={(opt) => toggleMulti(field.id, opt)}
               />
@@ -142,7 +181,7 @@ export function IntakeForm({
             <Save className="mr-2 h-4 w-4" /> Save draft
           </Button>
           <Button onClick={() => submit(true)} disabled={pending}>
-            {locked ? "Update submitted intake" : "Mark intake complete"}
+            {locked ? "Update submitted intake" : inHandover ? "Submit for verification" : "Mark intake complete"}
           </Button>
         </div>
       )}
@@ -156,19 +195,33 @@ function Field({
   onChange,
   onToggleMulti,
   readOnly = false,
+  hint,
 }: {
   field: IntakeField
   value: unknown
   onChange: (v: unknown) => void
   onToggleMulti: (option: string) => void
   readOnly?: boolean
+  /** "ai" = pre-filled by the AI; "blank" = deliberately left for on-site data. */
+  hint?: "ai" | "blank"
 }) {
   const isFull = field.type === "textarea" || field.type === "multiselect"
+  const isEmpty = Array.isArray(value) ? value.length === 0 : value === undefined || value === null || value === ""
   return (
     <div className={cn("space-y-2", isFull && "sm:col-span-2")}>
-      <Label className="text-sm">
-        {field.label}
-        {field.unit ? <span className="ml-1 text-xs text-muted-foreground">({field.unit})</span> : null}
+      <Label className="flex flex-wrap items-center gap-2 text-sm">
+        <span>{field.label}</span>
+        {field.unit ? <span className="text-xs text-muted-foreground">({field.unit})</span> : null}
+        {hint === "ai" ? (
+          <span className="inline-flex items-center gap-1 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+            <Sparkles className="h-2.5 w-2.5" /> AI
+          </span>
+        ) : null}
+        {hint === "blank" && isEmpty ? (
+          <span className="inline-flex items-center gap-1 rounded bg-[var(--score-mid)]/15 px-1.5 py-0.5 text-[10px] font-medium text-[var(--score-mid)]">
+            <MapPin className="h-2.5 w-2.5" /> Needs field data
+          </span>
+        ) : null}
       </Label>
       {field.help ? <p className="text-xs text-muted-foreground">{field.help}</p> : null}
 

@@ -15,6 +15,8 @@ import {
   accessibilitySchema,
   evPlanSchema,
   proposalSchema,
+  prospectPropertiesSchema,
+  intakePrefillSchema,
 } from "@/lib/ai/schemas"
 
 const MODEL = "google/gemini-3.5-flash"
@@ -70,6 +72,16 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
     schema: proposalSchema,
     instructions:
       "Write a persuasive, itemized commercial proposal from the property's assessment and plans. Include a compelling summary and clear line items with realistic USD unit prices. Do not invent work the plans don't support.",
+  },
+  "prospect-properties": {
+    schema: prospectPropertiesSchema,
+    instructions:
+      "You are the Property Prospector. Given a target city, state, property type, and count, propose that many realistic CANDIDATE commercial properties of that type in that market that would benefit from autonomous-arrival (robotaxi) infrastructure. For each, give the likely business name, best-fit propertyType, a best-effort street address, city, region (state), postal code, main phone, and best-effort latitude/longitude for mapping. These are UNVERIFIED prospecting leads for a human to confirm — say so in each note and never fabricate a precise phone or address you are not reasonably confident about (use an empty string, and 0 for unknown coordinates). Do not duplicate names. Prefer well-known real venues/organizations in that city when you are confident they exist.",
+  },
+  "prefill-intake": {
+    schema: intakePrefillSchema,
+    instructions:
+      "You are the Intake Pre-Filler. The input includes the property, its type, and a `fields` list (each with id, label, type, and options). Fill ONLY the intake fields you can answer with medium-to-high confidence from general public knowledge of this property or of how this KIND of property is typically built (e.g. a modern hotel usually has automatic sliding doors and standard elevators). Use ONLY field ids from the provided list. For select/multiselect fields, choose only from the given options (multiselect = comma-separated). For boolean fields use 'true'/'false'. NEVER guess exact on-site measurements (corridor/path widths in cm, elevation change, precise counts) or anything requiring a site visit — put those field ids in `leftBlank` for the field operator. It is correct and expected to leave many fields blank. Summarize what you filled versus what you left for the operator.",
   },
 }
 
