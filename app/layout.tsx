@@ -2,6 +2,7 @@ import type React from "react"
 import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 import { Toaster } from "@/components/ui/sonner"
+import { RoboWidget } from "@/components/support/robo-widget"
 import "./globals.css"
 
 const geistSans = Geist({
@@ -40,6 +41,7 @@ export default function RootLayout({
     <html lang="en" className={`bg-background ${geistSans.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
         {children}
+        <RoboWidget />
         <Toaster position="top-center" />
       </body>
     </html>

@@ -24,7 +24,11 @@ const OPERATOR_NAV_HREFS = new Set([
 ])
 
 /** Destinations only admins/owners may open. */
-const ADMIN_ONLY_NAV_HREFS = new Set(["/dashboard/properties/database", "/dashboard/verification"])
+const ADMIN_ONLY_NAV_HREFS = new Set([
+  "/dashboard/properties/database",
+  "/dashboard/verification",
+  "/dashboard/support",
+])
 
 /** Property detail tabs a Field Operator may open. */
 const OPERATOR_PROPERTY_TABS = new Set(["intake", "documents"])
@@ -66,5 +70,10 @@ export function canAccessProspectDatabase(role: Role): boolean {
 
 /** The admin verification queue: admins/owners only. */
 export function canAccessVerification(role: Role): boolean {
+  return isAdminRole(role)
+}
+
+/** The Robo support inbox: admins/owners only. */
+export function canAccessSupport(role: Role): boolean {
   return isAdminRole(role)
 }

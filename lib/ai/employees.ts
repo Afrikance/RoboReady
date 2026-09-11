@@ -17,6 +17,7 @@ export type EmployeeSlug =
   | "proposal-writer"
   | "property-prospector"
   | "intake-prefiller"
+  | "support-concierge"
 
 export type AIEmployee = {
   slug: EmployeeSlug
@@ -127,6 +128,15 @@ export const AI_EMPLOYEES: Record<EmployeeSlug, AIEmployee> = {
     department: "Operations",
     mission:
       "Pre-fill a property's intake with only the information that is confidently verifiable from public knowledge, and leave everything uncertain blank for the field operator — never guessing on-site measurements.",
+    requiresApproval: false,
+  },
+  "support-concierge": {
+    slug: "support-concierge",
+    name: "Robo",
+    title: "Contact & Support Concierge",
+    department: "Support",
+    mission:
+      "Be the friendly front door to RoboReady: answer questions about what RoboReady does, how assessments and pricing work, and guide visitors to the right next step — then capture their details so a human can follow up.",
     requiresApproval: false,
   },
 }

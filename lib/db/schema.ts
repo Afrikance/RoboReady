@@ -388,6 +388,31 @@ export const serviceSubscription = pgTable("service_subscription", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
+// ---------------------------------------------------------------------------
+// Support: inquiries captured by Robo, the contact & support AI agent
+// ---------------------------------------------------------------------------
+
+// Platform-level (not org-scoped): these come from anonymous marketing-site
+// visitors as well as signed-in users. The RoboReady operator console reads
+// them from a single global inbox at /dashboard/support.
+export const supportInquiry = pgTable("support_inquiry", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  email: text("email"),
+  // question | demo | pricing | support | partnership | other
+  topic: text("topic").notNull().default("other"),
+  message: text("message").notNull(),
+  // The chat transcript that produced this inquiry, for context in the inbox.
+  conversation: jsonb("conversation").notNull().default([]),
+  // new | in_progress | resolved
+  status: text("status").notNull().default("new"),
+  source: text("source").notNull().default("robo"),
+  pageUrl: text("pageUrl"),
+  userId: text("userId"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
 export const evPlan = pgTable("ev_plan", {
   id: text("id").primaryKey(),
   organizationId: text("organizationId").notNull(),
