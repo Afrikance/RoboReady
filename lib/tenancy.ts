@@ -4,17 +4,24 @@ import { and, desc, eq } from "drizzle-orm"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { auditLog, membership, organization } from "@/lib/db/schema"
+import { auditLog, invite, membership, organization } from "@/lib/db/schema"
+import { type Role } from "@/lib/roles"
 
-export type Role = "owner" | "admin" | "member" | "operator" | "client"
+// Re-export the client-safe role primitives so existing `@/lib/tenancy`
+// importers keep working. The definitions live in lib/roles.ts (no server-only
+// deps) so the client bundle can share them.
+export { FIELD_ROLES, isFieldRole, ASSIGNABLE_ROLES, ROLE_LABELS } from "@/lib/roles"
+export type { Role, FieldRole } from "@/lib/roles"
 
-// Field Operators collect on-site survey data. They share the "member" rank so
-// existing `assertRole(ctx, "member")` gates (running intake/planners) keep
-// working unchanged; download gating in Settings uses explicit role checks, not
-// this hierarchy.
+// Field roles (operator, vendor, contractor) collect / build out on-site work.
+// They share the "member" rank so existing `assertRole(ctx, "member")` gates
+// (running intake/planners) keep working unchanged; the narrower per-surface
+// gating uses explicit role checks in lib/access.ts, not this hierarchy.
 const ROLE_RANK: Record<Role, number> = {
   client: 0,
   operator: 1,
+  vendor: 1,
+  contractor: 1,
   member: 1,
   admin: 2,
   owner: 3,
@@ -31,6 +38,7 @@ export type OrgContext = {
   organizationId: string
   organizationName: string
   role: Role
+  logoUrl: string | null
 }
 
 /** Returns the signed-in user or null. Never throws. */
@@ -64,6 +72,7 @@ export async function getOrgContext(): Promise<OrgContext | null> {
       organizationId: membership.organizationId,
       role: membership.role,
       organizationName: organization.name,
+      logoUrl: organization.logoUrl,
     })
     .from(membership)
     .innerJoin(organization, eq(organization.id, membership.organizationId))
@@ -79,6 +88,7 @@ export async function getOrgContext(): Promise<OrgContext | null> {
     organizationId: row.organizationId,
     organizationName: row.organizationName,
     role: row.role as Role,
+    logoUrl: row.logoUrl ?? null,
   }
 }
 
@@ -126,13 +136,65 @@ export async function recordAudit(input: {
 }
 
 /**
+ * Consumes the oldest pending invite matching this user's email, joining them
+ * to that org with the invited role. This is how a Client / Field Operator /
+ * Vendor / Contractor "logs in": an owner/admin invites their email, and on
+ * first entry the invite becomes their membership instead of a personal org.
+ * Returns the resulting OrgContext, or null when there is no pending invite.
+ */
+async function acceptPendingInviteFor(user: SessionUser): Promise<OrgContext | null> {
+  const pending = await db
+    .select()
+    .from(invite)
+    .where(and(eq(invite.email, user.email.toLowerCase()), eq(invite.status, "pending")))
+    .orderBy(desc(invite.createdAt))
+    .limit(1)
+
+  const row = pending[0]
+  if (!row) return null
+
+  try {
+    await db.insert(membership).values({
+      id: crypto.randomUUID(),
+      organizationId: row.organizationId,
+      userId: user.id,
+      role: row.role,
+    })
+  } catch (err) {
+    // Already a member (unique orgUser) — fine, just mark the invite accepted.
+    console.log("[v0] invite membership existed:", (err as Error).message)
+  }
+
+  await db
+    .update(invite)
+    .set({ status: "accepted", acceptedByUserId: user.id, acceptedAt: new Date() })
+    .where(eq(invite.id, row.id))
+
+  await recordAudit({
+    organizationId: row.organizationId,
+    userId: user.id,
+    action: "invite.accepted",
+    entityType: "invite",
+    entityId: row.id,
+    metadata: { role: row.role },
+  })
+
+  return getOrgContext()
+}
+
+/**
  * Guarantees the signed-in user has an organization. Called after auth to
- * lazily provision a personal org on first entry. Idempotent.
+ * lazily provision membership on first entry. Prefers accepting a pending
+ * invite (joining an existing org with the invited role); only when there is
+ * none does it provision a personal org owned by the user. Idempotent.
  */
 export async function ensureOrganization(name?: string): Promise<OrgContext> {
   const user = await requireUser()
   const existing = await getOrgContext()
   if (existing) return existing
+
+  const invited = await acceptPendingInviteFor(user)
+  if (invited) return invited
 
   const orgId = crypto.randomUUID()
   const orgName = name?.trim() || `${user.name.split(" ")[0]}'s Workspace`
@@ -175,5 +237,6 @@ export async function ensureOrganization(name?: string): Promise<OrgContext> {
     organizationId: orgId,
     organizationName: orgName,
     role: "owner",
+    logoUrl: null,
   }
 }

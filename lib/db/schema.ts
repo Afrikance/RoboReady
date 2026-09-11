@@ -73,6 +73,9 @@ export const organization = pgTable("organization", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   createdByUserId: text("createdByUserId").notNull(),
+  // Optional custom logo image (Vercel Blob URL). Falls back to the built-in
+  // RoboReady wordmark when null.
+  logoUrl: text("logoUrl"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
@@ -83,7 +86,7 @@ export const membership = pgTable(
     id: text("id").primaryKey(),
     organizationId: text("organizationId").notNull(),
     userId: text("userId").notNull(),
-    // owner | admin | member | client
+    // owner | admin | member | operator | client | vendor | contractor
     role: text("role").notNull().default("member"),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
   },
@@ -412,6 +415,47 @@ export const supportInquiry = pgTable("support_inquiry", {
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// Access: invitations and per-property field-staff assignments
+// ---------------------------------------------------------------------------
+
+// An owner/admin invites an email into their org with a chosen role. When that
+// person signs in (or up) with the matching email, the pending invite is what
+// joins them to the org with the assigned role — this is how someone logs in
+// as a Client, Field Operator, Vendor, or Contractor.
+export const invite = pgTable("invite", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  email: text("email").notNull(),
+  // owner | admin | member | operator | client | vendor | contractor
+  role: text("role").notNull().default("member"),
+  // pending | accepted | revoked
+  status: text("status").notNull().default("pending"),
+  invitedByUserId: text("invitedByUserId").notNull(),
+  acceptedByUserId: text("acceptedByUserId"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  acceptedAt: timestamp("acceptedAt"),
+})
+
+// Assigns a field-staff member (operator/vendor/contractor) to a specific
+// property so they can build out its assessment and report. Field roles only
+// see properties they are assigned to.
+export const propertyAssignment = pgTable(
+  "property_assignment",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    propertyId: text("propertyId").notNull(),
+    userId: text("userId").notNull(),
+    role: text("role").notNull().default("operator"),
+    assignedByUserId: text("assignedByUserId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    propertyUser: unique().on(t.propertyId, t.userId),
+  }),
+)
 
 export const evPlan = pgTable("ev_plan", {
   id: text("id").primaryKey(),

@@ -27,7 +27,9 @@ import { listPayments } from "@/app/actions/payments"
 import { getActiveSubscription } from "@/app/actions/subscriptions"
 import { ServicePlanPanel } from "@/components/plans/service-plan-panel"
 import { getOrgContext } from "@/lib/tenancy"
-import { canUsePropertyTab } from "@/lib/access"
+import { canUsePropertyTab, canManageTeam } from "@/lib/access"
+import { listAssignableStaff, listAssignmentsForProperty } from "@/app/actions/assignments"
+import { PropertyAssignments } from "@/components/property/property-assignments"
 import { intakeCompletion } from "@/lib/intake/questions"
 import { Badge } from "@/components/ui/badge"
 
@@ -73,6 +75,13 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const assessmentReady = assessment?.roboReadyScore != null
   const canVerify = ctx ? ctx.role === "owner" || ctx.role === "admin" : false
 
+  // Admins/owners manage which field staff are assigned to build out this
+  // property. Load the assignment data only for them.
+  const canAssign = ctx ? canManageTeam(ctx.role) : false
+  const [assignments, staff] = canAssign
+    ? await Promise.all([listAssignmentsForProperty(id), listAssignableStaff()])
+    : [[], []]
+
   // Front-of-funnel pipeline metadata: AI-prefilled vs blank fields, and the
   // soft-gate warning shown until an admin verifies the field-collected data.
   const pipeline = (property.metadata as { pipeline?: { prefill?: { filled?: string[]; leftBlank?: string[] } } } | null)
@@ -107,7 +116,14 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const tabs = allTabs.filter((tab) => canUsePropertyTab(role, tab.id))
 
   const allPanels: Record<string, ReactNode> = {
-    overview: <OverviewPanel property={property} address={address} />,
+    overview: (
+      <div className="space-y-6">
+        <OverviewPanel property={property} address={address} />
+        {canAssign ? (
+          <PropertyAssignments propertyId={id} assignments={assignments} staff={staff} />
+        ) : null}
+      </div>
+    ),
     intake: (
       <IntakeForm
         propertyId={id}

@@ -1,8 +1,10 @@
 import Link from "next/link"
-import { FileText, FileDown, Building2 } from "lucide-react"
+import { FileText, FileDown, Building2, Palette } from "lucide-react"
 import { ensureOrganization } from "@/lib/tenancy"
 import { listProperties } from "@/app/actions/properties"
 import { canDownloadBlankIntake, canDownloadFilledIntake } from "@/lib/intake/access"
+import { canManageTeam } from "@/lib/access"
+import { LogoUploader } from "@/components/branding/logo-uploader"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -14,6 +16,8 @@ const ROLE_LABEL: Record<string, string> = {
   admin: "Admin",
   member: "Member",
   operator: "Field Operator",
+  vendor: "Vendor",
+  contractor: "Contractor",
   client: "Client",
 }
 
@@ -21,6 +25,7 @@ export default async function SettingsPage() {
   const ctx = await ensureOrganization()
   const canBlank = canDownloadBlankIntake(ctx.role)
   const canFilled = canDownloadFilledIntake(ctx.role)
+  const canBrand = canManageTeam(ctx.role)
   const properties = canFilled ? await listProperties() : []
 
   return (
@@ -32,6 +37,19 @@ export default async function SettingsPage() {
           <Badge variant="secondary">{ROLE_LABEL[ctx.role] ?? ctx.role}</Badge>.
         </p>
       </div>
+
+      {canBrand ? (
+        <section className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-center gap-2">
+            <Palette className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Branding</h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Customize the logo shown across your workspace. Admins and owners only.
+          </p>
+          <LogoUploader initialLogoUrl={ctx.logoUrl} />
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-border bg-card p-6">
         <div className="flex items-center gap-2">

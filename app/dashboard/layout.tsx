@@ -22,7 +22,7 @@ export default async function DashboardLayout({
       <aside className="sticky top-0 hidden h-svh flex-col bg-sidebar lg:flex">
         <div className="flex h-16 items-center border-b border-sidebar-border px-5">
           <Link href="/dashboard">
-            <Logo invert />
+            <Logo invert size="md" imageUrl={ctx.logoUrl} />
           </Link>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
@@ -37,7 +37,7 @@ export default async function DashboardLayout({
         <header className="sticky top-0 z-10 flex h-16 items-center justify-between border-b bg-background/80 px-4 backdrop-blur sm:px-6">
           <div className="flex items-center gap-3 lg:hidden">
             <Link href="/dashboard">
-              <Logo />
+              <Logo size="md" imageUrl={ctx.logoUrl} />
             </Link>
           </div>
           <div className="hidden text-sm text-muted-foreground lg:block">

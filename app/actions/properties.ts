@@ -1,10 +1,30 @@
 "use server"
 
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
-import { assessment, property } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { assessment, payment, property, propertyAssignment } from "@/lib/db/schema"
+import { assertRole, isFieldRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { tierRank, type AssessmentTierId } from "@/lib/products"
+
+/**
+ * Property IDs a field-role user (operator/vendor/contractor) may see. Returns
+ * null for non-field roles, meaning "no assignment filter — see all org
+ * properties". Field roles with zero assignments get an empty array.
+ */
+async function assignedPropertyIdsFor(ctx: OrgContext): Promise<string[] | null> {
+  if (!isFieldRole(ctx.role)) return null
+  const rows = await db
+    .select({ propertyId: propertyAssignment.propertyId })
+    .from(propertyAssignment)
+    .where(
+      and(
+        eq(propertyAssignment.organizationId, ctx.organizationId),
+        eq(propertyAssignment.userId, ctx.user.id),
+      ),
+    )
+  return rows.map((r) => r.propertyId)
+}
 
 export type PropertyInput = {
   name: string
@@ -30,10 +50,17 @@ export type ActionResult<T = undefined> =
 
 export async function listProperties() {
   const ctx = await requireOrgContext()
+  const assignedIds = await assignedPropertyIdsFor(ctx)
+  if (assignedIds !== null && assignedIds.length === 0) return []
+
   return db
     .select()
     .from(property)
-    .where(eq(property.organizationId, ctx.organizationId))
+    .where(
+      assignedIds === null
+        ? eq(property.organizationId, ctx.organizationId)
+        : and(eq(property.organizationId, ctx.organizationId), inArray(property.id, assignedIds)),
+    )
     .orderBy(desc(property.updatedAt))
 }
 
@@ -65,8 +92,65 @@ export async function listPropertiesWithScores() {
   return props.map((p) => ({ ...p, latestScore: latest.get(p.id) ?? null }))
 }
 
+export type PropertyTableRow = {
+  id: string
+  name: string
+  city: string | null
+  region: string | null
+  propertyType: string
+  status: string
+  latestScore: number | null
+  purchasedTier: AssessmentTierId | null
+  hasReport: boolean
+}
+
+/**
+ * Flattened property rows for the list/table view: score, best paid assessment
+ * tier, and whether a report has been generated. Reuses the same funnel and
+ * field-role scoping as the card grid via listPropertiesWithScores.
+ */
+export async function listPropertiesForTable(): Promise<PropertyTableRow[]> {
+  const ctx = await requireOrgContext()
+  const props = await listPropertiesWithScores()
+
+  // Best paid assessment tier per property, in one org-scoped query.
+  const paid = await db
+    .select({ propertyId: payment.propertyId, tier: payment.tier })
+    .from(payment)
+    .where(
+      and(
+        eq(payment.organizationId, ctx.organizationId),
+        eq(payment.kind, "assessment"),
+        eq(payment.status, "paid"),
+      ),
+    )
+  const bestTier = new Map<string, AssessmentTierId>()
+  for (const r of paid) {
+    if (!r.propertyId || !r.tier) continue
+    const current = bestTier.get(r.propertyId) ?? null
+    if (tierRank(r.tier as AssessmentTierId) > tierRank(current)) {
+      bestTier.set(r.propertyId, r.tier as AssessmentTierId)
+    }
+  }
+
+  return props.map((p) => ({
+    id: p.id,
+    name: p.name,
+    city: p.city,
+    region: p.region,
+    propertyType: p.propertyType,
+    status: p.status,
+    latestScore: p.latestScore,
+    purchasedTier: bestTier.get(p.id) ?? null,
+    hasReport: (p.metadata as { report?: unknown } | null)?.report != null,
+  }))
+}
+
 export async function getProperty(id: string) {
   const ctx = await requireOrgContext()
+  const assignedIds = await assignedPropertyIdsFor(ctx)
+  if (assignedIds !== null && !assignedIds.includes(id)) return null
+
   const rows = await db
     .select()
     .from(property)
