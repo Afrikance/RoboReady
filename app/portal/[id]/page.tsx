@@ -25,7 +25,7 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
       </header>
       <main className="mx-auto max-w-3xl px-6 py-10">
         <div className="rounded-xl border border-border bg-background p-6 shadow-sm sm:p-10 print:border-0 print:p-0 print:shadow-none">
-          <ReportView ctx={ctx} />
+          <ReportView ctx={ctx} enforce />
         </div>
         <p className="mt-6 text-center text-xs text-muted-foreground">
           This assessment was prepared by {ctx.organizationName} using RoboReady.

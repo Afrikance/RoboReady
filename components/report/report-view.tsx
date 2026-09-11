@@ -1,6 +1,13 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
 import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
 import { PlanSchematic } from "@/components/plans/plan-schematic"
+import { Lock } from "lucide-react"
+import {
+  getAssessmentTier,
+  nextTier,
+  type AssessmentTierId,
+  type ReportFeature,
+} from "@/lib/products"
 
 export type ReportData = {
   headline: string
@@ -11,6 +18,10 @@ export type ReportData = {
 }
 
 export type ReportContext = {
+  /** Highest assessment tier the property has paid for (null = none). */
+  tier: AssessmentTierId | null
+  /** Report features the client is entitled to see. */
+  entitled: ReportFeature[]
   propertyName: string
   address: string
   organizationName: string
@@ -50,8 +61,36 @@ export type ReportContext = {
   report: ReportData | null
 }
 
-/** The canonical report layout. Rendered inside the app AND on the print/portal page. */
-export function ReportView({ ctx }: { ctx: ReportContext }) {
+/** A tasteful placeholder shown where a section would be, gated behind a higher tier. */
+function LockedSection({ title, feature }: { title: string; feature: ReportFeature }) {
+  const upsell = nextTier(null)
+  // Find the lowest tier that actually includes this feature, for accurate copy.
+  const unlockTier =
+    getAssessmentTier("standard")?.includes.includes(feature)
+      ? getAssessmentTier("standard")
+      : getAssessmentTier("pro")
+  const label = unlockTier?.name ?? upsell?.name ?? "a higher tier"
+  return (
+    <section className="rounded-lg border border-dashed border-border bg-muted/30 p-5 print:hidden">
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-muted-foreground">
+        <Lock className="h-4 w-4" /> {title}
+      </h2>
+      <p className="mt-1.5 text-sm text-muted-foreground text-pretty">
+        Included in the <span className="font-medium text-foreground">{label}</span>. Upgrade this assessment to
+        unlock {title.toLowerCase()}.
+      </p>
+    </section>
+  )
+}
+
+/**
+ * The canonical report layout. Rendered inside the app AND on the print/portal
+ * page. When `enforce` is true, sections above the property's purchased tier
+ * are replaced with a locked upsell stub (client-facing surfaces); when false,
+ * everything renders (internal staff preview).
+ */
+export function ReportView({ ctx, enforce = false }: { ctx: ReportContext; enforce?: boolean }) {
+  const has = (f: ReportFeature) => !enforce || ctx.entitled.includes(f)
   const total = ctx.assets.reduce((s, a) => s + (a.unitCost ? Number(a.unitCost) * a.quantity : 0), 0)
 
   return (
@@ -80,7 +119,7 @@ export function ReportView({ ctx }: { ctx: ReportContext }) {
       </section>
 
       {/* Category breakdown */}
-      {ctx.breakdown.length > 0 ? (
+      {has("categories") && ctx.breakdown.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Readiness by category</h2>
           <div className="space-y-3">
@@ -108,30 +147,36 @@ export function ReportView({ ctx }: { ctx: ReportContext }) {
         </section>
       ) : null}
 
-      {/* AI narrative sections */}
-      {ctx.report?.sections?.length ? (
-        <section className="space-y-5">
-          {ctx.report.sections.map((s, i) => (
-            <div key={i}>
-              <h2 className="text-lg font-semibold">{s.heading}</h2>
-              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground text-pretty">{s.body}</p>
-            </div>
-          ))}
-        </section>
-      ) : null}
+      {/* AI narrative + site concept (Standard tier and up) */}
+      {has("narrative") ? (
+        <>
+          {ctx.report?.sections?.length ? (
+            <section className="space-y-5">
+              {ctx.report.sections.map((s, i) => (
+                <div key={i}>
+                  <h2 className="text-lg font-semibold">{s.heading}</h2>
+                  <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground text-pretty">{s.body}</p>
+                </div>
+              ))}
+            </section>
+          ) : null}
+          {ctx.conceptNarrative ? (
+            <section>
+              <h2 className="text-lg font-semibold">{ctx.conceptTitle ?? "Site concept"}</h2>
+              <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground text-pretty">
+                {ctx.conceptNarrative}
+              </p>
+            </section>
+          ) : null}
+        </>
+      ) : (
+        <LockedSection title="Site concept & narrative report" feature="narrative" />
+      )}
 
-      {/* Site concept */}
-      {ctx.conceptNarrative ? (
-        <section>
-          <h2 className="text-lg font-semibold">{ctx.conceptTitle ?? "Site concept"}</h2>
-          <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground text-pretty">
-            {ctx.conceptNarrative}
-          </p>
-        </section>
-      ) : null}
-
-      {/* Floor plan + site plan schematics */}
-      {ctx.plan?.floorPlan || ctx.plan?.sitePlan ? (
+      {/* Floor plan + site plan schematics (Pro tier) */}
+      {!has("plans") ? (
+        <LockedSection title="Floor & site plans" feature="plans" />
+      ) : ctx.plan?.floorPlan || ctx.plan?.sitePlan ? (
         <section className="space-y-4">
           <h2 className="text-lg font-semibold">Floor &amp; site plans</h2>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -167,7 +212,7 @@ export function ReportView({ ctx }: { ctx: ReportContext }) {
       ) : null}
 
       {/* Recommendations */}
-      {ctx.recommendations.length > 0 ? (
+      {has("recommendations") && ctx.recommendations.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Recommendations</h2>
           <ol className="space-y-3">
@@ -185,8 +230,8 @@ export function ReportView({ ctx }: { ctx: ReportContext }) {
         </section>
       ) : null}
 
-      {/* Infrastructure plan */}
-      {ctx.assets.length > 0 ? (
+      {/* Infrastructure plan (Standard tier and up) */}
+      {has("infrastructure") && ctx.assets.length > 0 ? (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">Proposed infrastructure</h2>
           <table className="w-full text-sm">

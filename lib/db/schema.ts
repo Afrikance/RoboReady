@@ -293,6 +293,8 @@ export const payment = pgTable("payment", {
   proposalId: text("proposalId"),
   // assessment | proposal_deposit
   kind: text("kind").notNull(),
+  // For kind='assessment': which tier was bought (basic | standard | pro).
+  tier: text("tier"),
   amountCents: integer("amountCents").notNull(),
   currency: text("currency").notNull().default("usd"),
   // pending | paid | failed
@@ -352,6 +354,36 @@ export const propertyPlan = pgTable("property_plan", {
   floorPlanImageUrl: text("floorPlanImageUrl"),
   sitePlanImageUrl: text("sitePlanImageUrl"),
   version: integer("version").notNull().default(1),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
+// MVP 3: recurring Concierge + Maintenance service plans
+// ---------------------------------------------------------------------------
+
+// One active recurring plan per property (enforced by a partial unique index on
+// status='active', created in the migration). Amount + plan definition are
+// server-controlled; Stripe holds the recurring billing via a subscription.
+export const serviceSubscription = pgTable("service_subscription", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  // References a plan id from lib/service-plans.ts (source of truth for price).
+  planId: text("planId").notNull(),
+  // month | year
+  interval: text("interval").notNull().default("month"),
+  amountCents: integer("amountCents").notNull(),
+  currency: text("currency").notNull().default("usd"),
+  // pending | active | canceled
+  status: text("status").notNull().default("pending"),
+  stripeSessionId: text("stripeSessionId"),
+  stripeSubscriptionId: text("stripeSubscriptionId"),
+  stripeCustomerId: text("stripeCustomerId"),
+  currentPeriodEnd: timestamp("currentPeriodEnd"),
+  cancelAtPeriodEnd: boolean("cancelAtPeriodEnd").notNull().default(false),
+  canceledAt: timestamp("canceledAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
