@@ -4,6 +4,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings } from "lucide-react"
+import { canUseNavHref } from "@/lib/access"
+import type { Role } from "@/lib/tenancy"
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard, exact: true },
@@ -15,12 +17,13 @@ const NAV = [
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
 ]
 
-export function SidebarNav() {
+export function SidebarNav({ role }: { role: Role }) {
   const pathname = usePathname()
+  const items = NAV.filter((item) => canUseNavHref(role, item.href))
 
   return (
     <nav className="flex flex-col gap-1 px-3 py-2" aria-label="Primary">
-      {NAV.map((item) => {
+      {items.map((item) => {
         const active = item.exact ? pathname === item.href : pathname.startsWith(item.href)
         const Icon = item.icon
         return (

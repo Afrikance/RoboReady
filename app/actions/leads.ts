@@ -12,19 +12,24 @@ import { LEAD_STAGES, type LeadStage, type LeadInput } from "@/lib/leads/types"
 
 export async function listLeads() {
   const ctx = await requireOrgContext()
+  const scope = [eq(lead.organizationId, ctx.organizationId)]
+  // Field Operators only see the leads they own.
+  if (ctx.role === "operator") scope.push(eq(lead.ownerUserId, ctx.user.id))
   return db
     .select()
     .from(lead)
-    .where(eq(lead.organizationId, ctx.organizationId))
+    .where(and(...scope))
     .orderBy(desc(lead.updatedAt))
 }
 
 export async function getLead(id: string) {
   const ctx = await requireOrgContext()
+  const scope = [eq(lead.id, id), eq(lead.organizationId, ctx.organizationId)]
+  if (ctx.role === "operator") scope.push(eq(lead.ownerUserId, ctx.user.id))
   const rows = await db
     .select()
     .from(lead)
-    .where(and(eq(lead.id, id), eq(lead.organizationId, ctx.organizationId)))
+    .where(and(...scope))
     .limit(1)
   return rows[0] ?? null
 }
@@ -75,10 +80,12 @@ export async function updateLeadStage(id: string, stage: LeadStage): Promise<Act
   const ctx = await requireOrgContext()
   if (!LEAD_STAGES.includes(stage)) return { ok: false, error: "Unknown stage." }
 
+  const scope = [eq(lead.id, id), eq(lead.organizationId, ctx.organizationId)]
+  if (ctx.role === "operator") scope.push(eq(lead.ownerUserId, ctx.user.id))
   await db
     .update(lead)
     .set({ stage, updatedAt: new Date() })
-    .where(and(eq(lead.id, id), eq(lead.organizationId, ctx.organizationId)))
+    .where(and(...scope))
 
   await recordAudit({
     organizationId: ctx.organizationId,
@@ -102,6 +109,8 @@ export async function updateLead(id: string, patch: Partial<LeadInput>): Promise
     return { ok: false, error: "You do not have permission to edit leads." }
   }
 
+  const scope = [eq(lead.id, id), eq(lead.organizationId, ctx.organizationId)]
+  if (ctx.role === "operator") scope.push(eq(lead.ownerUserId, ctx.user.id))
   await db
     .update(lead)
     .set({
@@ -114,7 +123,7 @@ export async function updateLead(id: string, patch: Partial<LeadInput>): Promise
       notes: patch.notes ?? undefined,
       updatedAt: new Date(),
     })
-    .where(and(eq(lead.id, id), eq(lead.organizationId, ctx.organizationId)))
+    .where(and(...scope))
 
   revalidatePath(`/dashboard/leads/${id}`)
   revalidatePath("/dashboard/leads")

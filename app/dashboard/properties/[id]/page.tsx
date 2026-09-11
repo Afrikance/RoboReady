@@ -24,6 +24,7 @@ import { getWayfinding, getAccessibility, getEvPlan } from "@/app/actions/planne
 import { getLatestProposal } from "@/app/actions/proposals"
 import { listPayments } from "@/app/actions/payments"
 import { getOrgContext } from "@/lib/tenancy"
+import { canUsePropertyTab } from "@/lib/access"
 import { intakeCompletion } from "@/lib/intake/questions"
 import { Badge } from "@/components/ui/badge"
 
@@ -68,7 +69,10 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     .filter(Boolean)
     .join(", ")
 
-  const tabs: TabDef[] = [
+  // Field Operators only work the Intake + Documents tabs; everyone else sees
+  // the full analysis workflow.
+  const role = ctx?.role ?? "member"
+  const allTabs: TabDef[] = [
     { id: "overview", label: "Overview" },
     { id: "intake", label: "Intake", badge: `${completion}%` },
     { id: "documents", label: "Documents", badge: String(docs.length) },
@@ -82,6 +86,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     { id: "proposal", label: "Proposal", badge: proposal ? `v${proposal.version}` : undefined },
     { id: "report", label: "Report" },
   ]
+  const tabs = allTabs.filter((tab) => canUsePropertyTab(role, tab.id))
 
   const panels = {
     overview: <OverviewPanel property={property} address={address} />,

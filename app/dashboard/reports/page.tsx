@@ -1,13 +1,16 @@
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { FileText, ArrowRight } from "lucide-react"
 import { ensureOrganization } from "@/lib/tenancy"
+import { isOperator, OPERATOR_HOME } from "@/lib/access"
 import { listPropertiesWithScores } from "@/app/actions/properties"
 import { scoreBand } from "@/components/score/score-gauge"
 
 export const metadata = { title: "Reports" }
 
 export default async function ReportsPage() {
-  await ensureOrganization()
+  const ctx = await ensureOrganization()
+  if (isOperator(ctx.role)) redirect(OPERATOR_HOME)
   const properties = await listPropertiesWithScores()
   const assessed = properties.filter((p) => p.latestScore != null)
 

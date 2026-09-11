@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation"
 import { ensureOrganization } from "@/lib/tenancy"
+import { isOperator, OPERATOR_HOME } from "@/lib/access"
 import { listMembers } from "@/app/actions/team"
 import { Badge } from "@/components/ui/badge"
 
@@ -14,6 +16,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default async function TeamPage() {
   const ctx = await ensureOrganization()
+  if (isOperator(ctx.role)) redirect(OPERATOR_HOME)
   const members = await listMembers()
 
   return (

@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { StatCard } from "@/components/shell/stat-card"
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
+import { redirect } from "next/navigation"
 import { listPropertiesWithScores } from "@/app/actions/properties"
 import { ensureOrganization } from "@/lib/tenancy"
+import { isOperator, OPERATOR_HOME } from "@/lib/access"
 
 export const metadata = { title: "Overview" }
 
@@ -14,7 +16,9 @@ export default async function DashboardOverview() {
   // Guarantee the workspace exists before any tenant-scoped query. The layout
   // also calls this, but page and layout render concurrently, so we must not
   // depend on layout ordering here.
-  await ensureOrganization()
+  const ctx = await ensureOrganization()
+  // Field Operators don't get the portfolio overview.
+  if (isOperator(ctx.role)) redirect(OPERATOR_HOME)
   const properties = await listPropertiesWithScores()
 
   const assessed = properties.filter((p) => p.latestScore != null)

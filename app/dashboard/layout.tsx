@@ -26,7 +26,7 @@ export default async function DashboardLayout({
           </Link>
         </div>
         <div className="flex-1 overflow-y-auto py-2">
-          <SidebarNav />
+          <SidebarNav role={ctx.role} />
         </div>
         <div className="border-t border-sidebar-border p-4 text-xs text-sidebar-foreground/50">
           RoboReady · MVP
