@@ -75,6 +75,16 @@ export function readPrefill(metadata: unknown): { filled: string[]; leftBlank: s
   return null
 }
 
+/** Reads the current Field Work claim (who is working the property) off metadata. */
+export function readClaim(metadata: unknown): { byUserId: string; byName: string; at: string } | null {
+  if (metadata && typeof metadata === "object" && "pipeline" in metadata) {
+    const c = (metadata as { pipeline?: { claim?: { byUserId?: string; byName?: string; at?: string } | null } })
+      .pipeline?.claim
+    if (c && c.byUserId) return { byUserId: c.byUserId, byName: c.byName ?? "Someone", at: c.at ?? "" }
+  }
+  return null
+}
+
 /** Reads Scout's unverified prospecting note off a row's metadata. */
 export function readProspectNote(metadata: unknown): string | null {
   if (metadata && typeof metadata === "object" && "prospectNote" in metadata) {

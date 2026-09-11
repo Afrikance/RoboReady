@@ -8,6 +8,15 @@ import { hasRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { intakeCompletion } from "@/lib/intake/questions"
 import type { ActionResult } from "@/app/actions/properties"
 
+/** Clears any Field Work claim stored on a property's metadata.pipeline. */
+function dropClaim(metadata: unknown): Record<string, unknown> {
+  const base = (metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>) : {}) ?? {}
+  const pipeline =
+    base.pipeline && typeof base.pipeline === "object" ? { ...(base.pipeline as Record<string, unknown>) } : {}
+  pipeline.claim = null
+  return { ...base, pipeline }
+}
+
 /** Returns the latest intake submission for a property, or null. */
 export async function getIntake(propertyId: string) {
   const ctx = await requireOrgContext()
@@ -29,7 +38,7 @@ export async function saveIntake(
 
   // Ownership check.
   const [prop] = await db
-    .select({ id: property.id, status: property.status })
+    .select({ id: property.id, status: property.status, metadata: property.metadata })
     .from(property)
     .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
     .limit(1)
@@ -79,10 +88,17 @@ export async function saveIntake(
   // the field-work handover queue goes to the admin verification queue; a
   // property in the direct flow proceeds straight to assessing as before.
   if (complete) {
-    const nextStatus = prop.status === "handover" ? "pending_verification" : "assessing"
+    const fromHandover = prop.status === "handover"
+    const nextStatus = fromHandover ? "pending_verification" : "assessing"
     await db
       .update(property)
-      .set({ status: nextStatus, updatedAt: new Date() })
+      // Leaving Field Work clears the claim so it isn't shown as in-progress
+      // once it moves to the verification queue.
+      .set({
+        status: nextStatus,
+        updatedAt: new Date(),
+        ...(fromHandover ? { metadata: dropClaim(prop.metadata) } : {}),
+      })
       .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
     if (nextStatus === "pending_verification") {
       revalidatePath("/dashboard/handover")

@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq, inArray } from "drizzle-orm"
+import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { intakeSubmission, property } from "@/lib/db/schema"
@@ -17,6 +17,8 @@ type Pipeline = {
   prefill?: { jobId: string; filled: string[]; leftBlank: string[]; summary: string; at: string }
   verification?: { byUserId: string; at: string; note?: string }
   returnedToField?: { byUserId: string; at: string; note: string }
+  // Who is currently working this property in Field Work. Null when unclaimed.
+  claim?: { byUserId: string; byName: string; at: string } | null
 }
 
 function readPipeline(metadata: unknown): Pipeline {
@@ -304,6 +306,114 @@ export async function prefillProperty(propertyId: string): Promise<ActionResult<
 }
 
 // ---------------------------------------------------------------------------
+// Field Work claiming (shared pool, single active worker, admin handoff)
+// ---------------------------------------------------------------------------
+
+/**
+ * Claims a Field Work property for the current user so it grays out for everyone
+ * else and no two people collect the same site. Operators + admins share one
+ * pool. A first claim is atomic (only wins when still unclaimed); passing
+ * `takeover` lets a different worker pick up an in-progress property to finish it.
+ */
+export async function claimProperty(
+  propertyId: string,
+  opts?: { takeover?: boolean },
+): Promise<ActionResult<{ claimed: boolean }>> {
+  const ctx = await requireOrgContext()
+  if (!hasRole(ctx, "member")) return { ok: false, error: "You do not have permission to claim field work." }
+
+  const [prop] = await db
+    .select({ id: property.id, status: property.status, metadata: property.metadata })
+    .from(property)
+    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
+    .limit(1)
+  if (!prop) return { ok: false, error: "Property not found." }
+  if (prop.status !== "handover") return { ok: false, error: "This property is no longer in field work." }
+
+  const current = readPipeline(prop.metadata).claim ?? null
+  const claim = { byUserId: ctx.user.id, byName: ctx.user.name, at: new Date().toISOString() }
+
+  // Already mine — nothing to do.
+  if (current && current.byUserId === ctx.user.id) return { ok: true, data: { claimed: true } }
+
+  if (current && !opts?.takeover) {
+    return { ok: false, error: `Already claimed by ${current.byName}.` }
+  }
+
+  if (opts?.takeover) {
+    // Explicit handoff: last write wins.
+    await db
+      .update(property)
+      .set({ metadata: mergePipeline(prop.metadata, { claim }), updatedAt: new Date() })
+      .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
+  } else {
+    // Atomic first claim: only wins if still unclaimed, so simultaneous starts
+    // can't both succeed.
+    const won = await db
+      .update(property)
+      .set({ metadata: mergePipeline(prop.metadata, { claim }), updatedAt: new Date() })
+      .where(
+        and(
+          eq(property.id, propertyId),
+          eq(property.organizationId, ctx.organizationId),
+          eq(property.status, "handover"),
+          sql`(${property.metadata} #> '{pipeline,claim}') is null`,
+        ),
+      )
+      .returning({ id: property.id })
+    if (won.length === 0) return { ok: false, error: "Someone just claimed this property." }
+  }
+
+  await recordAudit({
+    organizationId: ctx.organizationId,
+    userId: ctx.user.id,
+    action: opts?.takeover ? "fieldwork.taken_over" : "fieldwork.claimed",
+    entityType: "property",
+    entityId: propertyId,
+    metadata: opts?.takeover && current ? { previousUserId: current.byUserId } : undefined,
+  })
+
+  revalidatePath("/dashboard/handover")
+  return { ok: true, data: { claimed: true } }
+}
+
+/** Releases a claim back to the pool. Allowed for the claimer or any admin. */
+export async function releaseClaim(propertyId: string): Promise<ActionResult> {
+  const ctx = await requireOrgContext()
+  if (!hasRole(ctx, "member")) return { ok: false, error: "You do not have permission to release field work." }
+
+  const [prop] = await db
+    .select({ id: property.id, metadata: property.metadata })
+    .from(property)
+    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
+    .limit(1)
+  if (!prop) return { ok: false, error: "Property not found." }
+
+  const current = readPipeline(prop.metadata).claim ?? null
+  if (!current) return { ok: true, data: undefined }
+  if (current.byUserId !== ctx.user.id && !hasRole(ctx, "admin")) {
+    return { ok: false, error: "Only the operator who claimed it or an admin can release it." }
+  }
+
+  await db
+    .update(property)
+    .set({ metadata: mergePipeline(prop.metadata, { claim: null }), updatedAt: new Date() })
+    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
+
+  await recordAudit({
+    organizationId: ctx.organizationId,
+    userId: ctx.user.id,
+    action: "fieldwork.released",
+    entityType: "property",
+    entityId: propertyId,
+    metadata: current.byUserId !== ctx.user.id ? { releasedUserId: current.byUserId } : undefined,
+  })
+
+  revalidatePath("/dashboard/handover")
+  return { ok: true, data: undefined }
+}
+
+// ---------------------------------------------------------------------------
 // Admin verification queue
 // ---------------------------------------------------------------------------
 
@@ -367,6 +477,8 @@ export async function returnToField(propertyId: string, note: string): Promise<A
       status: "handover",
       metadata: mergePipeline(prop.metadata, {
         returnedToField: { byUserId: ctx.user.id, at: new Date().toISOString(), note: reason },
+        // Free the claim so anyone can pick the property back up in Field Work.
+        claim: null,
       }),
       updatedAt: new Date(),
     })
