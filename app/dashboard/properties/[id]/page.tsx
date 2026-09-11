@@ -12,6 +12,8 @@ import { ConceptPanel } from "@/components/concept/concept-panel"
 import { AssetPanel } from "@/components/assets/asset-panel"
 import { getLatestAssessment, getLatestConcept } from "@/app/actions/assessment"
 import { listAssets } from "@/app/actions/assets"
+import { buildReportContext } from "@/app/actions/report"
+import { ReportPanel } from "@/components/report/report-panel"
 import { intakeCompletion } from "@/lib/intake/questions"
 import { Badge } from "@/components/ui/badge"
 
@@ -30,12 +32,13 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const property = await getProperty(id)
   if (!property) notFound()
 
-  const [intake, docs, assessment, concept, assets] = await Promise.all([
+  const [intake, docs, assessment, concept, assets, reportCtx] = await Promise.all([
     getIntake(id),
     listDocuments(id),
     getLatestAssessment(id),
     getLatestConcept(id),
     listAssets(id),
+    buildReportContext(id),
   ])
   const intakeAnswers = (intake?.answers as Record<string, unknown>) ?? {}
   const completion = intakeCompletion(intakeAnswers)
@@ -80,7 +83,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         }))}
       />
     ),
-    report: <Placeholder title="Report" note="Generate and export the client-ready report here." />,
+    report: reportCtx ? <ReportPanel propertyId={id} ctx={reportCtx} /> : null,
   }
 
   return (
@@ -142,14 +145,5 @@ function OverviewPanel({
         </div>
       ))}
     </dl>
-  )
-}
-
-function Placeholder({ title, note }: { title: string; note: string }) {
-  return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mt-1 max-w-sm text-sm text-muted-foreground text-pretty">{note}</p>
-    </div>
   )
 }

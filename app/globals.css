@@ -175,3 +175,15 @@
     -webkit-font-smoothing: antialiased;
   }
 }
+
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  body {
+    background: #fff;
+  }
+  .print\:hidden {
+    display: none !important;
+  }
+}
