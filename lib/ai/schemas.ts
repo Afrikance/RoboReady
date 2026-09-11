@@ -59,8 +59,8 @@ export const infrastructurePlanSchema = z.object({
   assets: z.array(
     z.object({
       assetType: z
-        .enum(["ev-charger", "robot-charger", "landing-pad", "drone-pad", "sensor", "beacon"])
-        .describe("The kind of physical asset."),
+        .enum(["robotaxi-stand", "pudo-zone", "ev-charger", "robot-charger", "landing-pad", "drone-pad", "sensor", "beacon"])
+        .describe("The kind of physical asset. robotaxi-stand and pudo-zone support the primary robotaxi/CyberCab use case."),
       label: z.string(),
       quantity: z.number().int().min(1),
       unitCost: z.number().min(0).describe("Indicative cost per unit in USD."),
@@ -103,8 +103,8 @@ export const wayfindingSchema = z.object({
       name: z.string(),
       from: z.string(),
       to: z.string(),
-      mode: z.enum(["robot", "drone", "shared"]),
-      clearance: z.string().describe("Turning/width/clearance requirement."),
+      mode: z.enum(["robotaxi", "robot", "drone", "shared"]),
+      clearance: z.string().describe("Turning/width/clearance requirement. For robotaxi, curb-to-entrance passenger handoff paths."),
       notes: z.string(),
     }),
   ),

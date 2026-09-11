@@ -10,7 +10,7 @@ type Wayfinding = {
   version: number
 } | null
 
-const MODE_LABEL: Record<string, string> = { robot: "Robot", drone: "Drone", shared: "Shared" }
+const MODE_LABEL: Record<string, string> = { robotaxi: "Robotaxi", robot: "Robot", drone: "Drone", shared: "Shared" }
 const SIGN_LABEL: Record<string, string> = { beacon: "Beacon", qr: "QR code", fiducial: "Fiducial", sign: "Signage" }
 
 export function WayfindingPanel({ propertyId, plan }: { propertyId: string; plan: Wayfinding }) {

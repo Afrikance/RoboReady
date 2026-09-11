@@ -23,6 +23,21 @@ export type IntakeSection = {
 
 export const INTAKE_SECTIONS: IntakeSection[] = [
   {
+    id: "robotaxi",
+    title: "Robotaxi / CyberCab Readiness",
+    description:
+      "The primary use case: readiness for autonomous ride-hail (Waymo, Tesla Cybercab, Zoox) pick-up and drop-off at this property.",
+    fields: [
+      { id: "curbAccess", label: "Curbside pick-up / drop-off (PUDO)", type: "select", options: ["Dedicated PUDO lane or apron", "Shared curb with signage", "Street-only, no on-site curb", "None"], help: "A dedicated off-street PUDO area is the single biggest robotaxi readiness factor." },
+      { id: "pudoPoints", label: "Potential PUDO points on site", type: "number", placeholder: "e.g. 2" },
+      { id: "avStaging", label: "Staging / short-term parking for idle AVs", type: "select", options: ["Dedicated AV staging", "Shared lot with spare capacity", "Limited", "None"] },
+      { id: "avCharging", label: "On-site robotaxi fast-charging feasibility", type: "select", options: ["Existing DC fast charging", "Feasible with upgrades", "Difficult", "Unknown"] },
+      { id: "avPermits", label: "Local AV permitting / geofencing status", type: "select", options: ["City permits robotaxi operations", "In progress", "Not yet", "Unknown"] },
+      { id: "adaLoading", label: "ADA-compliant passenger loading area", type: "boolean", help: "Autonomous ride-hail must still serve riders with disabilities." },
+      { id: "fleetPartners", label: "Preferred robotaxi fleets", type: "multiselect", options: ["Waymo", "Tesla Cybercab", "Zoox", "Cruise", "Other / undecided"] },
+    ],
+  },
+  {
     id: "access",
     title: "Access & Circulation",
     description: "How robots and autonomous devices enter and move through the property.",
@@ -60,7 +75,7 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
     title: "Automation Goals",
     description: "What the operator wants robots and autonomous systems to do here.",
     fields: [
-      { id: "useCases", label: "Target use cases", type: "multiselect", options: ["Delivery robots", "Cleaning robots", "Security patrol", "Drone operations", "EV / robot charging", "Concierge / info kiosks", "Inventory"] },
+      { id: "useCases", label: "Target use cases", type: "multiselect", options: ["Robotaxi / CyberCab (AV pick-up & drop-off)", "Delivery robots", "Cleaning robots", "Security patrol", "Drone operations", "EV / robot charging", "Concierge / info kiosks", "Inventory"], help: "Robotaxi / CyberCab is RoboReady's primary use case." },
       { id: "timeline", label: "Deployment timeline", type: "select", options: ["Exploring", "Within 6 months", "6-12 months", "12+ months"] },
       { id: "budgetBand", label: "Budget band", type: "select", options: ["Not sure yet", "Under $25k", "$25k-$100k", "$100k-$500k", "$500k+"] },
       { id: "notes", label: "Anything else we should know?", type: "textarea", placeholder: "Constraints, priorities, existing systems..." },

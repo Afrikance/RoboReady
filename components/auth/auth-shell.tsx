@@ -22,11 +22,12 @@ export function AuthShell({
 
         <div className="max-w-md">
           <h2 className="text-3xl font-semibold leading-tight tracking-tight text-balance">
-            Is your property ready for the robots?
+            Is your property ready for robotaxis?
           </h2>
           <p className="mt-4 leading-relaxed text-sidebar-foreground/70">
-            Run AI-powered readiness assessments, get a RoboReady Score, and plan the
-            infrastructure to deploy autonomous robots, drones, and vehicles.
+            Run AI-powered readiness assessments for autonomous ride-hail — Waymo, Tesla Cybercab,
+            Zoox — plus robots and drones. Get a RoboReady Score and plan the infrastructure to
+            deploy.
           </p>
 
           <ul className="mt-8 flex flex-col gap-4 text-sm">

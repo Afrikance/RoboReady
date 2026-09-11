@@ -30,14 +30,15 @@ export default async function LandingPage() {
           <div className="flex flex-col gap-6">
             <span className="inline-flex w-fit items-center gap-2 rounded-full border bg-secondary px-3 py-1 text-xs font-medium text-muted-foreground">
               <span className="size-1.5 rounded-full bg-primary" />
-              Autonomy readiness, quantified
+              Robotaxi &amp; CyberCab readiness, quantified
             </span>
             <h1 className="text-4xl font-semibold leading-[1.05] tracking-tight text-balance sm:text-5xl">
-              Is your property ready for the robots?
+              Is your property ready for robotaxis?
             </h1>
             <p className="max-w-lg text-lg leading-relaxed text-muted-foreground text-pretty">
-              RoboReady assesses commercial buildings for robot, drone, and autonomous-vehicle
-              deployment. Run an AI assessment, get a 0–100 RoboReady Score, and plan exactly what
+              RoboReady assesses commercial properties for autonomous ride-hail — Waymo, Tesla
+              Cybercab, and Zoox pick-up and drop-off — plus delivery robots, drones, and EV
+              charging. Run an AI assessment, get a 0–100 RoboReady Score, and plan exactly what
               infrastructure you need.
             </p>
             <div className="flex flex-wrap gap-3">
@@ -57,8 +58,8 @@ export default async function LandingPage() {
             <div className="rounded-xl border bg-card p-8 shadow-sm">
               <ScoreGauge score={82} size={260} />
               <p className="mt-4 max-w-xs text-center text-sm text-muted-foreground">
-                Example: a mid-size hotel scoring 82 — ready for delivery robots, with minor
-                elevator-integration work.
+                Example: a mixed-use hotel scoring 82 — robotaxi-ready with a dedicated pick-up/drop-off
+                lane, needing only minor fast-charging work.
               </p>
             </div>
           </div>
@@ -78,8 +79,8 @@ export default async function LandingPage() {
             />
             <Feature
               icon={MapPin}
-              title="Infrastructure planning"
-              body="Place chargers, landing pads, and staging zones on a satellite map of the site."
+              title="Robotaxi infrastructure"
+              body="Place robotaxi stands, pick-up/drop-off zones, and fast chargers on a satellite map of the site."
             />
             <Feature
               icon={FileText}

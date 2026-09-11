@@ -15,6 +15,8 @@ import { Check, Plus, Trash2 } from "lucide-react"
 type Asset = MapAsset & { quantity: number; unitCost: string | null }
 
 const TYPE_LABELS: Record<string, string> = {
+  "robotaxi-stand": "Robotaxi stand",
+  "pudo-zone": "Pick-up / drop-off zone",
   "ev-charger": "EV charger",
   "robot-charger": "Robot charger",
   "landing-pad": "Landing pad",
@@ -36,7 +38,7 @@ export function AssetPanel({
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [assetType, setAssetType] = useState<string>("ev-charger")
+  const [assetType, setAssetType] = useState<string>("robotaxi-stand")
   const [label, setLabel] = useState("")
   const [quantity, setQuantity] = useState(1)
   const [unitCost, setUnitCost] = useState<string>("")

@@ -23,17 +23,17 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
   assessment: {
     schema: assessmentSchema,
     instructions:
-      "Analyze the property and intake answers. Produce a rigorous RoboReady Score (0-100) with a per-category breakdown across access, connectivity, layout, and goals. Be specific and honest — a poorly-suited property should score low. Ground every finding in the provided data.",
+      "Analyze the property and intake answers. RoboReady's PRIMARY use case is robotaxi / CyberCab (autonomous ride-hail such as Waymo, Tesla Cybercab, Zoox) pick-up and drop-off — weight the robotaxi intake answers (curbside PUDO, AV staging/parking, fast-charging, local permitting/geofencing, ADA loading) heavily, then account for any secondary use cases. Produce a rigorous RoboReady Score (0-100) with a per-category breakdown across access, connectivity, layout, and goals. Be specific and honest — a property with no viable curbside pick-up/drop-off should score low for robotaxi readiness. Ground every finding in the provided data.",
   },
   "site-concept": {
     schema: siteConceptSchema,
     instructions:
-      "Using the assessment, design a practical site concept: name the zones, their purpose, and which autonomous systems operate where. Keep it grounded in the property's real constraints.",
+      "Using the assessment, design a practical site concept. Lead with the robotaxi / CyberCab experience — where AVs enter, pick up and drop off passengers (PUDO), stage while idle, and charge — then cover any secondary autonomous systems. Name the zones, their purpose, and which autonomous systems operate where. Keep it grounded in the property's real constraints.",
   },
   "infrastructure-plan": {
     schema: infrastructurePlanSchema,
     instructions:
-      "Recommend physical infrastructure assets with realistic quantities and indicative US-dollar unit costs. Only recommend what the assessment and goals justify.",
+      "Recommend physical infrastructure assets with realistic quantities and indicative US-dollar unit costs. Prioritize the primary robotaxi / CyberCab use case (robotaxi-stand berths and pudo-zone pick-up/drop-off areas) before secondary assets. Only recommend what the assessment and goals justify.",
   },
   report: {
     schema: reportSchema,
@@ -48,7 +48,7 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
   wayfinding: {
     schema: wayfindingSchema,
     instructions:
-      "Design robot/drone circulation for this property: named routes between key zones with clearance requirements, plus machine-readable signage/beacon placements. Ground it in the property's real layout and assessment.",
+      "Design circulation for this property. Prioritize the primary robotaxi / CyberCab use case: use mode 'robotaxi' for curb-to-entrance passenger handoff routes between pick-up/drop-off zones and building entrances, then add robot/drone routes. Include clearance requirements and machine-readable signage/beacon placements. Ground it in the property's real layout and assessment.",
   },
   accessibility: {
     schema: accessibilitySchema,
@@ -58,7 +58,7 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
   "ev-plan": {
     schema: evPlanSchema,
     instructions:
-      "Plan EV and robot charging for this property. Recommend a realistic station mix and counts, estimate peak electrical load and whether a service upgrade is likely, and give indicative installed unit costs in USD. Only recommend what the property's scale and goals justify.",
+      "Plan charging for this property with the primary robotaxi / CyberCab use case in mind — autonomous ride-hail fleets need high-throughput DC fast charging to stay in service. Recommend a realistic station mix and counts (favoring dc-fast where robotaxi operations are planned), estimate peak electrical load and whether a service upgrade is likely, and give indicative installed unit costs in USD. Only recommend what the property's scale and goals justify.",
   },
   proposal: {
     schema: proposalSchema,
