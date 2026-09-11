@@ -386,6 +386,51 @@ export const evPlanSchema = z.object({
 })
 export type EvPlanOutput = z.infer<typeof evPlanSchema>
 
+// ---------------------------------------------------------------------------
+// Front-of-funnel prospecting pipeline
+// ---------------------------------------------------------------------------
+
+// Scout generates candidate commercial properties for a target city/type. These
+// are UNVERIFIED leads handed to humans to confirm — the model must never
+// present them as confirmed facts. Coordinates are best-effort for map/mileage
+// filtering. No array .max() (Gemini gotcha) — count is clamped in code.
+export const prospectPropertiesSchema = z.object({
+  candidates: z.array(
+    z.object({
+      name: z.string().describe("The property's likely business name."),
+      propertyType: z
+        .enum(["hotel", "apartment", "school", "business_park", "shopping_center", "hospital", "event_venue", "commercial"])
+        .describe("Best-fit category for this property."),
+      addressLine1: z.string().describe("Street address, best-effort. Leave empty if genuinely unknown."),
+      city: z.string(),
+      region: z.string().describe("State / province."),
+      postalCode: z.string().describe("Postal/ZIP code, best-effort; empty if unknown."),
+      phone: z.string().describe("Main contact phone, best-effort; empty string if unknown — never invent one."),
+      latitude: z.number().describe("Best-effort latitude for mapping. Use 0 if unknown."),
+      longitude: z.number().describe("Best-effort longitude for mapping. Use 0 if unknown."),
+      note: z.string().describe("One line on why this is a fit and how confident you are; state clearly it is unverified."),
+    }),
+  ),
+})
+export type ProspectPropertiesOutput = z.infer<typeof prospectPropertiesSchema>
+
+// Vero pre-fills the intake with ONLY confidently-verifiable public info and
+// leaves everything uncertain blank for a human. Returns an ARRAY of answers
+// (not a dynamic-key object) to stay Gemini-safe; code reduces it to the intake
+// answers map and coerces each value by its field type.
+export const intakePrefillSchema = z.object({
+  answers: z.array(
+    z.object({
+      fieldId: z.string().describe("An intake field id provided in the input's field list. Only use ids from that list."),
+      value: z.string().describe("The value as a string. For multiselect, a comma-separated list. For boolean, 'true'/'false'."),
+      confidence: z.enum(CONFIDENCE_LEVELS).describe("Only include a field when confidence is medium or high."),
+    }),
+  ),
+  leftBlank: z.array(z.string()).describe("Field ids intentionally left blank because they require on-site verification or are unknown."),
+  summary: z.string().describe("2-3 sentences on what was filled vs left for the field operator."),
+})
+export type IntakePrefillOutput = z.infer<typeof intakePrefillSchema>
+
 export const proposalSchema = z.object({
   title: z.string(),
   summary: z.string().describe("A persuasive 2-4 sentence overview for the client."),

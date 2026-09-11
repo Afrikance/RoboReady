@@ -14,11 +14,14 @@ export type PropertyInput = {
   region?: string
   postalCode?: string
   country?: string
+  phone?: string
   latitude?: number | null
   longitude?: number | null
   squareFootage?: number | null
   floors?: number | null
   yearBuilt?: number | null
+  /** When true, the property enters the prospect database instead of the direct intake flow. */
+  asProspect?: boolean
 }
 
 export type ActionResult<T = undefined> =
@@ -92,24 +95,27 @@ export async function createProperty(input: PropertyInput): Promise<ActionResult
     region: input.region || null,
     postalCode: input.postalCode || null,
     country: input.country || null,
+    phone: input.phone || null,
     latitude: input.latitude ?? null,
     longitude: input.longitude ?? null,
     squareFootage: input.squareFootage ?? null,
     floors: input.floors ?? null,
     yearBuilt: input.yearBuilt ?? null,
-    status: "intake",
+    status: input.asProspect ? "prospect" : "intake",
+    metadata: input.asProspect ? { pipeline: { source: "manual" } } : null,
   })
 
   await recordAudit({
     organizationId: ctx.organizationId,
     userId: ctx.user.id,
-    action: "property.created",
+    action: input.asProspect ? "prospect.created" : "property.created",
     entityType: "property",
     entityId: id,
     metadata: { name },
   })
 
   revalidatePath("/dashboard/properties")
+  revalidatePath("/dashboard/properties/database")
   revalidatePath("/dashboard")
   return { ok: true, data: { id } }
 }

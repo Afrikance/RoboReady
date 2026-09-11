@@ -29,7 +29,7 @@ export async function saveIntake(
 
   // Ownership check.
   const [prop] = await db
-    .select({ id: property.id })
+    .select({ id: property.id, status: property.status })
     .from(property)
     .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
     .limit(1)
@@ -75,12 +75,19 @@ export async function saveIntake(
     })
   }
 
-  // Advance property status when intake is completed.
+  // Advance property status when intake is completed. A property coming out of
+  // the field-work handover queue goes to the admin verification queue; a
+  // property in the direct flow proceeds straight to assessing as before.
   if (complete) {
+    const nextStatus = prop.status === "handover" ? "pending_verification" : "assessing"
     await db
       .update(property)
-      .set({ status: "assessing", updatedAt: new Date() })
+      .set({ status: nextStatus, updatedAt: new Date() })
       .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
+    if (nextStatus === "pending_verification") {
+      revalidatePath("/dashboard/handover")
+      revalidatePath("/dashboard/verification")
+    }
   }
 
   await recordAudit({

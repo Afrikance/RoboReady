@@ -9,6 +9,10 @@ import { listPropertiesWithScores } from "@/app/actions/properties"
 export const metadata = { title: "Properties" }
 
 const STATUS_LABEL: Record<string, string> = {
+  prospect: "Prospect",
+  handover: "Field work",
+  pending_verification: "In verification",
+  verified: "Verified",
   intake: "Intake",
   assessing: "Assessing",
   assessed: "Assessed",

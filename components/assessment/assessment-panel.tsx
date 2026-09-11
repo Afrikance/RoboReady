@@ -52,18 +52,37 @@ type Assessment = {
   createdAt: Date | string
 }
 
+function UnverifiedWarning() {
+  return (
+    <div className="mb-5 flex items-start gap-3 rounded-lg border border-[var(--score-mid)]/40 bg-[var(--score-mid)]/10 p-4 text-left">
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--score-mid)]" />
+      <div>
+        <p className="text-sm font-medium">Not admin-verified yet</p>
+        <p className="text-xs text-muted-foreground text-pretty">
+          This property hasn&apos;t been verified by an admin. You can still run the assessment, but verifying the
+          field-collected data first produces a more reliable score.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 export function AssessmentPanel({
   propertyId,
   assessment,
   intakeComplete,
+  unverifiedWarning = false,
 }: {
   propertyId: string
   assessment: Assessment | null
   intakeComplete: boolean
+  /** Soft gate: true when the property is in the prospecting funnel but not yet admin-verified. */
+  unverifiedWarning?: boolean
 }) {
   if (!assessment || assessment.roboReadyScore == null) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
+        {unverifiedWarning ? <div className="w-full max-w-md"><UnverifiedWarning /></div> : null}
         <p className="text-sm font-medium">No assessment yet</p>
         <p className="mb-5 mt-1 max-w-md text-sm text-muted-foreground text-pretty">
           {intakeComplete

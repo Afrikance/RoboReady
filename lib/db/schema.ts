@@ -120,12 +120,15 @@ export const property = pgTable("property", {
   region: text("region"),
   postalCode: text("postalCode"),
   country: text("country"),
+  phone: text("phone"),
   latitude: doublePrecision("latitude"),
   longitude: doublePrecision("longitude"),
   squareFootage: integer("squareFootage"),
   floors: integer("floors"),
   yearBuilt: integer("yearBuilt"),
-  // intake | assessing | assessed | proposal | active
+  // Front-of-funnel prospecting states precede the assessment flow:
+  // prospect | handover | pending_verification | verified
+  // then the existing: intake | assessing | assessed | proposal | active
   status: text("status").notNull().default("intake"),
   metadata: jsonb("metadata"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),

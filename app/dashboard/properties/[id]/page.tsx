@@ -32,6 +32,10 @@ import { Badge } from "@/components/ui/badge"
 export const metadata = { title: "Property" }
 
 const STATUS_LABELS: Record<string, string> = {
+  prospect: "Prospect",
+  handover: "Field work",
+  pending_verification: "In verification",
+  verified: "Verified",
   intake: "Intake",
   assessing: "Assessing",
   assessed: "Assessed",
@@ -66,6 +70,15 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const assessmentReady = assessment?.roboReadyScore != null
   const canVerify = ctx ? ctx.role === "owner" || ctx.role === "admin" : false
 
+  // Front-of-funnel pipeline metadata: AI-prefilled vs blank fields, and the
+  // soft-gate warning shown until an admin verifies the field-collected data.
+  const pipeline = (property.metadata as { pipeline?: { prefill?: { filled?: string[]; leftBlank?: string[] } } } | null)
+    ?.pipeline
+  const prefill = pipeline?.prefill
+    ? { filled: pipeline.prefill.filled ?? [], leftBlank: pipeline.prefill.leftBlank ?? [] }
+    : undefined
+  const unverifiedWarning = ["prospect", "handover", "pending_verification"].includes(property.status)
+
   const address = [property.addressLine1, property.city, property.region, property.country]
     .filter(Boolean)
     .join(", ")
@@ -97,10 +110,19 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         initialAnswers={intakeAnswers}
         initialStatus={intake?.status ?? "draft"}
         isAdmin={canVerify}
+        propertyStatus={property.status}
+        prefill={prefill}
       />
     ),
     documents: <DocumentPanel propertyId={id} initialDocs={docs} />,
-    assessment: <AssessmentPanel propertyId={id} assessment={assessment} intakeComplete={intakeComplete} />,
+    assessment: (
+      <AssessmentPanel
+        propertyId={id}
+        assessment={assessment}
+        intakeComplete={intakeComplete}
+        unverifiedWarning={unverifiedWarning}
+      />
+    ),
     concept: <ConceptPanel concept={concept} />,
     plans: <PlansPanel propertyId={id} plan={plan} intakeComplete={intakeComplete} />,
     assets: (
