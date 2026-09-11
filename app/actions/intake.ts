@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { intakeSubmission, property } from "@/lib/db/schema"
-import { recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { hasRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { intakeCompletion } from "@/lib/intake/questions"
 import type { ActionResult } from "@/app/actions/properties"
 
@@ -37,6 +37,17 @@ export async function saveIntake(
 
   const completion = intakeCompletion(answers)
   const existing = await getIntake(propertyId)
+
+  // Once an intake is submitted (completed) it becomes view-only for everyone
+  // except admins/owners. A Field Operator who submits can no longer edit it;
+  // only an admin can reopen or change a submitted intake.
+  if (existing?.status === "completed" && !hasRole(ctx, "admin")) {
+    return {
+      ok: false,
+      error: "This intake has been submitted and is locked. Only an admin can edit it.",
+    }
+  }
+
   const status = complete ? "completed" : "draft"
 
   let id: string

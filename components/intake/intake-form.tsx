@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Check, Save } from "lucide-react"
+import { Check, Lock, Save } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Answers = Record<string, unknown>
@@ -18,14 +18,22 @@ export function IntakeForm({
   propertyId,
   initialAnswers,
   initialStatus,
+  isAdmin = false,
 }: {
   propertyId: string
   initialAnswers: Answers
   initialStatus: string
+  /** Admins/owners can edit a submitted intake; everyone else is view-only once it is locked. */
+  isAdmin?: boolean
 }) {
   const [answers, setAnswers] = useState<Answers>(initialAnswers ?? {})
   const [pending, startTransition] = useTransition()
   const [status, setStatus] = useState(initialStatus)
+
+  // A submitted intake is locked. Non-admins get a view-only form; admins keep
+  // full edit access so they can correct or reopen it.
+  const locked = status === "completed"
+  const readOnly = locked && !isAdmin
 
   const completion = intakeCompletion(answers)
 
@@ -77,17 +85,35 @@ export function IntakeForm({
           </div>
           <div>
             <p className="text-sm font-medium">Intake completion</p>
-            <p className="text-xs text-muted-foreground">Fill in what you know — you can update this later.</p>
+            <p className="text-xs text-muted-foreground">
+              {readOnly
+                ? "This intake was submitted and is now view-only."
+                : locked
+                  ? "This intake was submitted. As an admin you can still edit it."
+                  : "Fill in what you know — you can update this later."}
+            </p>
           </div>
         </div>
-        {status === "completed" ? (
+        {locked ? (
           <Badge className="gap-1 bg-[var(--score-high)] text-white">
-            <Check className="h-3 w-3" /> Completed
+            <Check className="h-3 w-3" /> Submitted
           </Badge>
         ) : (
           <Badge variant="secondary">Draft</Badge>
         )}
       </div>
+
+      {readOnly ? (
+        <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-4">
+          <Lock className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+          <div>
+            <p className="text-sm font-medium">Submitted — view only</p>
+            <p className="text-xs text-muted-foreground text-pretty">
+              This intake form has been submitted and locked. Contact an admin if it needs to change.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {INTAKE_SECTIONS.map((section) => (
         <section key={section.id} className="space-y-4">
@@ -101,6 +127,7 @@ export function IntakeForm({
                 key={field.id}
                 field={field}
                 value={answers[field.id]}
+                readOnly={readOnly}
                 onChange={(v) => set(field.id, v)}
                 onToggleMulti={(opt) => toggleMulti(field.id, opt)}
               />
@@ -109,14 +136,16 @@ export function IntakeForm({
         </section>
       ))}
 
-      <div className="flex flex-wrap gap-3 border-t border-border pt-6">
-        <Button variant="outline" onClick={() => submit(false)} disabled={pending}>
-          <Save className="mr-2 h-4 w-4" /> Save draft
-        </Button>
-        <Button onClick={() => submit(true)} disabled={pending}>
-          Mark intake complete
-        </Button>
-      </div>
+      {readOnly ? null : (
+        <div className="flex flex-wrap gap-3 border-t border-border pt-6">
+          <Button variant="outline" onClick={() => submit(false)} disabled={pending}>
+            <Save className="mr-2 h-4 w-4" /> Save draft
+          </Button>
+          <Button onClick={() => submit(true)} disabled={pending}>
+            {locked ? "Update submitted intake" : "Mark intake complete"}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -126,11 +155,13 @@ function Field({
   value,
   onChange,
   onToggleMulti,
+  readOnly = false,
 }: {
   field: IntakeField
   value: unknown
   onChange: (v: unknown) => void
   onToggleMulti: (option: string) => void
+  readOnly?: boolean
 }) {
   const isFull = field.type === "textarea" || field.type === "multiselect"
   return (
@@ -145,6 +176,7 @@ function Field({
         <Input
           type={field.type === "number" ? "number" : "text"}
           placeholder={field.placeholder}
+          disabled={readOnly}
           value={(value as string | number | undefined) ?? ""}
           onChange={(e) => onChange(field.type === "number" ? (e.target.value === "" ? null : Number(e.target.value)) : e.target.value)}
         />
@@ -153,6 +185,7 @@ function Field({
       {field.type === "textarea" ? (
         <Textarea
           placeholder={field.placeholder}
+          disabled={readOnly}
           value={(value as string | undefined) ?? ""}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
@@ -167,10 +200,12 @@ function Field({
               <button
                 key={opt}
                 type="button"
+                disabled={readOnly}
                 onClick={() => onChange(opt === "Yes")}
                 className={cn(
                   "rounded-md border px-4 py-2 text-sm transition-colors",
                   selected ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted",
+                  readOnly && "cursor-default opacity-60 hover:bg-transparent",
                 )}
               >
                 {opt}
@@ -188,10 +223,12 @@ function Field({
               <button
                 key={opt}
                 type="button"
+                disabled={readOnly}
                 onClick={() => onChange(opt)}
                 className={cn(
                   "rounded-md border px-3 py-1.5 text-sm transition-colors",
                   selected ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted",
+                  readOnly && "cursor-default opacity-60 hover:bg-transparent",
                 )}
               >
                 {opt}
@@ -209,10 +246,12 @@ function Field({
               <button
                 key={opt}
                 type="button"
+                disabled={readOnly}
                 onClick={() => onToggleMulti(opt)}
                 className={cn(
                   "rounded-md border px-3 py-1.5 text-sm transition-colors",
                   selected ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-muted",
+                  readOnly && "cursor-default opacity-60 hover:bg-transparent",
                 )}
               >
                 {opt}

@@ -1,5 +1,6 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
 import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
+import { PlanSchematic } from "@/components/plans/plan-schematic"
 
 export type ReportData = {
   headline: string
@@ -31,6 +32,20 @@ export type ReportContext = {
   recommendations: Array<{ title: string; priority: string; detail: string; estimatedImpact: string }>
   conceptTitle: string | null
   conceptNarrative: string | null
+  plan: {
+    floorPlan: {
+      level?: string
+      summary?: string
+      spaces?: Array<{ name: string; kind: string; x: number; y: number; w: number; h: number }>
+      path?: Array<{ x: number; y: number }>
+      markers?: Array<{ x: number; y: number; label: string; kind?: string }>
+    } | null
+    sitePlan: {
+      summary?: string
+      elements?: Array<{ name: string; kind: string; x: number; y: number; w: number; h: number }>
+      markers?: Array<{ x: number; y: number; label: string; role?: string }>
+    } | null
+  } | null
   assets: Array<{ label: string; assetType: string; quantity: number; unitCost: string | null }>
   report: ReportData | null
 }
@@ -112,6 +127,42 @@ export function ReportView({ ctx }: { ctx: ReportContext }) {
           <p className="mt-1.5 whitespace-pre-line text-sm leading-relaxed text-muted-foreground text-pretty">
             {ctx.conceptNarrative}
           </p>
+        </section>
+      ) : null}
+
+      {/* Floor plan + site plan schematics */}
+      {ctx.plan?.floorPlan || ctx.plan?.sitePlan ? (
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold">Floor &amp; site plans</h2>
+          <div className="grid gap-5 sm:grid-cols-2">
+            {ctx.plan?.floorPlan ? (
+              <figure className="space-y-1.5">
+                <div className="aspect-square overflow-hidden rounded-lg border border-border bg-card p-2">
+                  <PlanSchematic
+                    rects={ctx.plan.floorPlan.spaces ?? []}
+                    path={ctx.plan.floorPlan.path ?? []}
+                    markers={ctx.plan.floorPlan.markers ?? []}
+                    ariaLabel="Interior floor plan schematic"
+                  />
+                </div>
+                <figcaption className="text-xs text-muted-foreground">
+                  Floor plan — interior{ctx.plan.floorPlan.level ? ` · ${ctx.plan.floorPlan.level}` : ""}
+                </figcaption>
+              </figure>
+            ) : null}
+            {ctx.plan?.sitePlan ? (
+              <figure className="space-y-1.5">
+                <div className="aspect-square overflow-hidden rounded-lg border border-border bg-card p-2">
+                  <PlanSchematic
+                    rects={ctx.plan.sitePlan.elements ?? []}
+                    markers={ctx.plan.sitePlan.markers ?? []}
+                    ariaLabel="Exterior site plan schematic"
+                  />
+                </div>
+                <figcaption className="text-xs text-muted-foreground">Site plan — exterior</figcaption>
+              </figure>
+            ) : null}
+          </div>
         </section>
       ) : null}
 

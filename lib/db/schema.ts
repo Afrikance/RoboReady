@@ -334,6 +334,25 @@ export const accessibilityAudit = pgTable("accessibility_audit", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
+export const propertyPlan = pgTable("property_plan", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  aiJobId: text("aiJobId"),
+  narrative: text("narrative"),
+  // Structured schematic layouts (normalized 0-100 grid) rendered as SVG diagrams.
+  floorPlan: jsonb("floorPlan"),
+  sitePlan: jsonb("sitePlan"),
+  // AI-generated illustrative renders, stored as private Blob pathnames served
+  // through /api/documents/file.
+  floorPlanImageUrl: text("floorPlanImageUrl"),
+  sitePlanImageUrl: text("sitePlanImageUrl"),
+  version: integer("version").notNull().default(1),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
 export const evPlan = pgTable("ev_plan", {
   id: text("id").primaryKey(),
   organizationId: text("organizationId").notNull(),

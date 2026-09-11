@@ -7,6 +7,7 @@ import { getEmployee } from "@/lib/ai/employees"
 import {
   assessmentSchema,
   siteConceptSchema,
+  sitePlanDesignSchema,
   infrastructurePlanSchema,
   reportSchema,
   leadQualificationSchema,
@@ -29,6 +30,11 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
     schema: siteConceptSchema,
     instructions:
       "You are the Site Intelligence Specialist. Decide WHERE the autonomous arrival infrastructure should go. Using the assessment, recommend robotaxi / CyberCab pickup zones: always a PRIMARY pickup/drop-off zone and an ACCESSIBLE boarding zone, plus an OVERFLOW/surge zone where the property warrants it. For each zone give its location relative to the main entrance, curb, and parking; the rationale; and potential conflicts with vehicle traffic, pedestrian flow, existing rideshare zones, loading, or emergency access. Then describe the broader concept and any operational zones. Never present an AI recommendation as an engineering approval. Keep everything grounded in the property's real constraints.",
+  },
+  "site-plan": {
+    schema: sitePlanDesignSchema,
+    instructions:
+      "You are the Site Intelligence Specialist producing two schematic drawings for this property, centered on the primary robotaxi / CyberCab use case. (1) floorPlan — an INTERIOR floor plan of the level where the passenger journey happens, laid out on a 0-100 grid: place rooms, corridors, lobby, elevator/stairs, and the exit toward the pickup as non-overlapping rectangles, then trace the passenger's walking route as an ordered `path` from their start point to that exit, and drop markers (start, elevator, turn, exit). Ground it in the interior survey fields (guestPathStart, path steps, elevator type, door types, narrowest width, landmarks, elevation change). (2) sitePlan — an EXTERIOR site plan on a 0-100 grid: place the building footprint, arrival drive, curb, primary/overflow/accessible robotaxi pickup pads, parking, and landscaping as rectangles, and drop arrival markers with their role. Keep both layouts legible and realistically proportioned to the property. Also write two vivid, specific text-to-image prompts (floorPlanImagePrompt, sitePlanImagePrompt) for clean top-down architectural illustrations of each plan. Never invent facts the inputs don't support; when a dimension is unknown, lay out a reasonable typical arrangement and keep it generic.",
   },
   "infrastructure-plan": {
     schema: infrastructurePlanSchema,

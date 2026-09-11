@@ -9,6 +9,8 @@ import { IntakeForm } from "@/components/intake/intake-form"
 import { DocumentPanel } from "@/components/documents/document-panel"
 import { AssessmentPanel } from "@/components/assessment/assessment-panel"
 import { ConceptPanel } from "@/components/concept/concept-panel"
+import { PlansPanel } from "@/components/plans/plans-panel"
+import { getPlan } from "@/app/actions/plans"
 import { AssetPanel } from "@/components/assets/asset-panel"
 import { getLatestAssessment, getLatestConcept } from "@/app/actions/assessment"
 import { listAssets } from "@/app/actions/assets"
@@ -40,12 +42,13 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const property = await getProperty(id)
   if (!property) notFound()
 
-  const [intake, docs, assessment, concept, assets, reportCtx, wayfinding, accessibility, ev, proposal, payments, ctx] =
+  const [intake, docs, assessment, concept, plan, assets, reportCtx, wayfinding, accessibility, ev, proposal, payments, ctx] =
     await Promise.all([
       getIntake(id),
       listDocuments(id),
       getLatestAssessment(id),
       getLatestConcept(id),
+      getPlan(id),
       listAssets(id),
       buildReportContext(id),
       getWayfinding(id),
@@ -71,6 +74,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     { id: "documents", label: "Documents", badge: String(docs.length) },
     { id: "assessment", label: "Assessment", badge: assessment?.roboReadyScore != null ? String(assessment.roboReadyScore) : undefined },
     { id: "concept", label: "Site concept" },
+    { id: "plans", label: "Plans", badge: plan ? `v${plan.version}` : undefined },
     { id: "assets", label: "Infrastructure", badge: assets.length ? String(assets.length) : undefined },
     { id: "wayfinding", label: "Wayfinding" },
     { id: "accessibility", label: "Accessibility", badge: accessibility?.score != null ? String(accessibility.score) : undefined },
@@ -82,11 +86,17 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const panels = {
     overview: <OverviewPanel property={property} address={address} />,
     intake: (
-      <IntakeForm propertyId={id} initialAnswers={intakeAnswers} initialStatus={intake?.status ?? "draft"} />
+      <IntakeForm
+        propertyId={id}
+        initialAnswers={intakeAnswers}
+        initialStatus={intake?.status ?? "draft"}
+        isAdmin={canVerify}
+      />
     ),
     documents: <DocumentPanel propertyId={id} initialDocs={docs} />,
     assessment: <AssessmentPanel propertyId={id} assessment={assessment} intakeComplete={intakeComplete} />,
     concept: <ConceptPanel concept={concept} />,
+    plans: <PlansPanel propertyId={id} plan={plan} intakeComplete={intakeComplete} />,
     assets: (
       <AssetPanel
         propertyId={id}

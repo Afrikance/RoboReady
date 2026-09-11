@@ -3,7 +3,7 @@
 import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
-import { assessment, siteConcept, infrastructureAsset, property } from "@/lib/db/schema"
+import { assessment, siteConcept, infrastructureAsset, property, propertyPlan } from "@/lib/db/schema"
 import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { runJob } from "@/lib/ai/orchestrator"
 import type { ReportOutput } from "@/lib/ai/schemas"
@@ -49,6 +49,13 @@ export async function buildReportContext(propertyId: string): Promise<ReportCont
       ),
     )
 
+  const [plan] = await db
+    .select()
+    .from(propertyPlan)
+    .where(and(eq(propertyPlan.propertyId, propertyId), eq(propertyPlan.organizationId, ctx.organizationId)))
+    .orderBy(desc(propertyPlan.version))
+    .limit(1)
+
   const meta = prop.metadata as Record<string, unknown> | null
   const report = (meta?.report as ReportContext["report"]) ?? null
 
@@ -63,6 +70,12 @@ export async function buildReportContext(propertyId: string): Promise<ReportCont
     recommendations: (assess?.recommendations as ReportContext["recommendations"]) ?? [],
     conceptTitle: concept?.title ?? null,
     conceptNarrative: concept?.narrative ?? null,
+    plan: plan
+      ? {
+          floorPlan: (plan.floorPlan as NonNullable<ReportContext["plan"]>["floorPlan"]) ?? null,
+          sitePlan: (plan.sitePlan as NonNullable<ReportContext["plan"]>["sitePlan"]) ?? null,
+        }
+      : null,
     assets: assets.map((a) => ({
       label: a.label,
       assetType: a.assetType,
