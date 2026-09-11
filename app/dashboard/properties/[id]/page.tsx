@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, MapPin } from "lucide-react"
@@ -88,7 +89,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   ]
   const tabs = allTabs.filter((tab) => canUsePropertyTab(role, tab.id))
 
-  const panels = {
+  const allPanels: Record<string, ReactNode> = {
     overview: <OverviewPanel property={property} address={address} />,
     intake: (
       <IntakeForm
@@ -127,6 +128,9 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     ),
     report: reportCtx ? <ReportPanel propertyId={id} ctx={reportCtx} /> : null,
   }
+  // Only ship panels for tabs the role can see — a hidden tab's content must
+  // never reach the client payload for a Field Operator.
+  const panels = Object.fromEntries(tabs.map((tab) => [tab.id, allPanels[tab.id]]))
 
   return (
     <div className="space-y-6">
