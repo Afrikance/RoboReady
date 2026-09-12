@@ -51,8 +51,26 @@ export type PropertyInput = {
   squareFootage?: number | null
   floors?: number | null
   yearBuilt?: number | null
+  /**
+   * Owner-provided knowledge base: freeform details about the building, its
+   * operations, goals, and constraints. The owner is the richest source of
+   * truth before the AI assessment, so these are stored on the property and
+   * fed into the assessment context.
+   */
+  details?: Record<string, string>
   /** When true, the property enters the prospect database instead of the direct intake flow. */
   asProspect?: boolean
+}
+
+/** Trims a details map and drops empty values so we never persist blank keys. */
+function cleanDetails(details?: Record<string, string>): Record<string, string> | null {
+  if (!details) return null
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(details)) {
+    const val = typeof v === "string" ? v.trim() : ""
+    if (val) out[k] = val.slice(0, 4000)
+  }
+  return Object.keys(out).length > 0 ? out : null
 }
 
 export type ActionResult<T = undefined> =
@@ -189,6 +207,11 @@ export async function createProperty(input: PropertyInput): Promise<ActionResult
   }
 
   const id = crypto.randomUUID()
+  const knowledgeBase = cleanDetails(input.details)
+  const metadata: Record<string, unknown> = {}
+  if (input.asProspect) metadata.pipeline = { source: "manual" }
+  if (knowledgeBase) metadata.knowledgeBase = knowledgeBase
+
   await db.insert(property).values({
     id,
     organizationId: ctx.organizationId,
@@ -207,7 +230,7 @@ export async function createProperty(input: PropertyInput): Promise<ActionResult
     floors: input.floors ?? null,
     yearBuilt: input.yearBuilt ?? null,
     status: input.asProspect ? "prospect" : "intake",
-    metadata: input.asProspect ? { pipeline: { source: "manual" } } : null,
+    metadata: Object.keys(metadata).length > 0 ? metadata : null,
   })
 
   await recordAudit({

@@ -6,7 +6,7 @@ import { deleteDocument } from "@/app/actions/documents"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { FileText, ImageIcon, Trash2, Upload, Download, Loader2 } from "lucide-react"
+import { FileText, ImageIcon, Video, Trash2, Upload, Download, Loader2 } from "lucide-react"
 
 type Doc = {
   id: string
@@ -18,7 +18,7 @@ type Doc = {
   createdAt: Date | string
 }
 
-const CATEGORIES = ["general", "floor-plan", "photo", "spec", "permit"]
+const CATEGORIES = ["general", "photo", "video", "floor-plan", "cad-dxf", "spec", "permit"]
 
 function formatSize(bytes: number | null) {
   if (!bytes) return ""
@@ -74,8 +74,10 @@ export function DocumentPanel({ propertyId, initialDocs }: { propertyId: string;
             <Upload className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <p className="text-sm font-medium">Upload floor plans, photos, permits, and specs</p>
-            <p className="text-xs text-muted-foreground">PDF, images, spreadsheets — up to 25 MB each</p>
+            <p className="text-sm font-medium">Upload photos, video, floor plans, CAD, permits, and specs</p>
+            <p className="text-xs text-muted-foreground">
+              Images, video, PDF, Word, and CAD (DXF/DWG) — up to 200 MB per video, 25 MB otherwise
+            </p>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
             {CATEGORIES.map((c) => (
@@ -95,6 +97,7 @@ export function DocumentPanel({ propertyId, initialDocs }: { propertyId: string;
           <input
             ref={inputRef}
             type="file"
+            accept=".pdf,.doc,.docx,.xlsx,.csv,.txt,.dxf,.dwg,image/*,video/*"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0]
@@ -114,11 +117,14 @@ export function DocumentPanel({ propertyId, initialDocs }: { propertyId: string;
         <ul className="divide-y divide-border rounded-lg border border-border">
           {initialDocs.map((doc) => {
             const isImage = doc.contentType?.startsWith("image/")
+            const isVideo = doc.contentType?.startsWith("video/")
             return (
               <li key={doc.id} className="flex items-center gap-3 p-3">
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted">
                   {isImage ? (
                     <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  ) : isVideo ? (
+                    <Video className="h-4 w-4 text-muted-foreground" />
                   ) : (
                     <FileText className="h-4 w-4 text-muted-foreground" />
                   )}

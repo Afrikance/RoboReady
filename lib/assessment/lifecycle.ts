@@ -5,6 +5,7 @@ import { db } from "@/lib/db"
 import {
   assessment,
   assessmentRun,
+  document,
   infrastructureAsset,
   intakeSubmission,
   property,
@@ -134,6 +135,18 @@ async function buildContext(propertyId: string, organizationId: string) {
     .orderBy(desc(intakeSubmission.updatedAt))
     .limit(1)
 
+  // The owner-supplied knowledge base (freeform details captured on the add-
+  // property form) and the manifest of documents/media they uploaded. The AI
+  // can't read binary files, but knowing a floor plan / DXF / walkthrough video
+  // exists — and its category — materially informs the assessment narrative.
+  const kb = (prop.metadata as { knowledgeBase?: Record<string, string> } | null)?.knowledgeBase ?? null
+
+  const docs = await db
+    .select({ name: document.name, category: document.category, contentType: document.contentType })
+    .from(document)
+    .where(and(eq(document.propertyId, propertyId), eq(document.organizationId, organizationId)))
+    .orderBy(desc(document.createdAt))
+
   return {
     prop,
     context: {
@@ -145,6 +158,12 @@ async function buildContext(propertyId: string, organizationId: string) {
         yearBuilt: prop.yearBuilt,
         location: [prop.city, prop.region, prop.country].filter(Boolean).join(", "),
       },
+      ownerKnowledgeBase: kb ?? {},
+      supportingDocuments: docs.map((d) => ({
+        name: d.name,
+        category: d.category,
+        kind: d.contentType?.split("/")[0] ?? "file",
+      })),
       intakeAnswers: (intake?.answers as Record<string, unknown>) ?? {},
     },
   }
