@@ -16,8 +16,9 @@ export default function NewPropertyPage() {
       </Link>
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Add a property</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Enter the building details. You&apos;ll run intake and an AI assessment next.
+        <p className="mt-1 text-sm text-muted-foreground text-pretty">
+          Share the building details and everything you know about it, then upload photos, a walkthrough video, floor
+          plans, and CAD files. The richer the picture, the sharper your AI assessment.
         </p>
       </div>
       <PropertyForm />
