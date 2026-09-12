@@ -14,15 +14,24 @@ export function isFieldRole(role: Role): role is FieldRole {
   return role === "operator" || role === "vendor" || role === "contractor"
 }
 
-/** Roles an owner/admin may assign when inviting someone. */
-export const ASSIGNABLE_ROLES: Role[] = ["admin", "member", "operator", "vendor", "contractor", "client"]
+/**
+ * Roles the Super Admin / Sub-Admins may assign when inviting someone.
+ * "owner" (Super Admin) is intentionally excluded — there is exactly one, keyed
+ * to a single account — and "member" is legacy and no longer offered.
+ */
+export const ASSIGNABLE_ROLES: Role[] = ["admin", "client", "operator", "vendor", "contractor"]
 
 export const ROLE_LABELS: Record<Role, string> = {
-  owner: "Owner",
-  admin: "Admin",
+  owner: "Super Admin",
+  admin: "Sub-Admin",
   member: "Member",
   operator: "Field Operator",
   vendor: "Vendor",
   contractor: "Contractor",
   client: "Client",
+}
+
+/** Property owners / customers. The default role for a self-service sign-up. */
+export function isClient(role: Role): boolean {
+  return role === "client"
 }

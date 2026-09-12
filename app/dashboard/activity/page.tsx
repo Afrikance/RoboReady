@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { listActivity } from "@/app/actions/ai"
 import { ensureOrganization } from "@/lib/tenancy"
-import { isOperator, OPERATOR_HOME } from "@/lib/access"
+import { isClient, isOperator, CLIENT_HOME, OPERATOR_HOME } from "@/lib/access"
 import { Badge } from "@/components/ui/badge"
 import { ApproveButton } from "@/components/ai/approve-button"
 import { Bot, Cpu, Clock } from "lucide-react"
@@ -21,6 +21,7 @@ function formatWhen(d: Date | string) {
 
 export default async function ActivityPage() {
   const ctx = await ensureOrganization()
+  if (isClient(ctx.role)) redirect(CLIENT_HOME)
   if (isOperator(ctx.role)) redirect(OPERATOR_HOME)
   const jobs = await listActivity()
 
