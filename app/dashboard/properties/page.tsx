@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { scoreBand } from "@/components/score/score-gauge"
 import { listPropertiesWithScores } from "@/app/actions/properties"
+import { ViewToggle } from "@/components/properties/view-toggle"
 
 export const metadata = { title: "Properties" }
 
@@ -32,12 +33,15 @@ export default async function PropertiesPage() {
             {properties.length} {properties.length === 1 ? "property" : "properties"} in your portfolio.
           </p>
         </div>
-        <Button asChild>
-          <Link href="/dashboard/properties/new">
-            <Plus className="size-4" />
-            Add property
-          </Link>
-        </Button>
+        <div className="flex items-center gap-3">
+          <ViewToggle active="grid" />
+          <Button asChild>
+            <Link href="/dashboard/properties/new">
+              <Plus className="size-4" />
+              Add property
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {properties.length === 0 ? (
