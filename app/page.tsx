@@ -162,7 +162,7 @@ export default async function LandingPage() {
               ))}
             </div>
             <p className="mt-8 text-center text-sm text-muted-foreground text-pretty">
-              Need ongoing monitoring or maintenance? Ask about our Care plans after your assessment.
+              Need ongoing monitoring or maintenance? Ask about our Care plans after your assessment, Powered by StaffGPT AI Workforce Technology.
             </p>
           </div>
         </section>
