@@ -60,9 +60,9 @@ export default async function LandingPage() {
             </h1>
             <p className="max-w-lg text-lg leading-relaxed text-muted-foreground text-pretty">
               RoboReady assesses commercial properties for autonomous ride-hail — Waymo, Tesla
-              Cybercab, UBER, and Zoox pick-up and drop-off — plus Humanoid Bots, delivery rovers, Drones, and EV
-              charging. Including Autonomous Agents and positioning for currebt and future vehicles. Run an AI assessment, get a 0–100 RoboReady Score, and plan exactly what
-              infrastructure you need.
+              Cybercab, UBER, and Zoox pick-up and drop-off — plus Humanoid Bots, Delivery Rovers, Drones, and EV
+              charging. Run an AI assessment, get a 0–100 RoboReady Score, and plan exactly what
+              infrastructure you need positioning for current and future vehicles.
             </p>
             <div className="flex flex-wrap gap-3">
               <Button asChild size="lg">
