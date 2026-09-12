@@ -4,6 +4,7 @@ import { redirect } from "next/navigation"
 import { Logo } from "@/components/brand/logo"
 import { SidebarNav } from "@/components/shell/sidebar-nav"
 import { UserMenu } from "@/components/shell/user-menu"
+import { NotificationBell } from "@/components/shell/notification-bell"
 import { getSessionUser, ensureOrganization } from "@/lib/tenancy"
 
 export default async function DashboardLayout({
@@ -43,12 +44,15 @@ export default async function DashboardLayout({
           <div className="hidden text-sm text-muted-foreground lg:block">
             {ctx.organizationName}
           </div>
-          <UserMenu
-            name={ctx.user.name}
-            email={ctx.user.email}
-            role={ctx.role}
-            orgName={ctx.organizationName}
-          />
+          <div className="flex items-center gap-1.5">
+            <NotificationBell />
+            <UserMenu
+              name={ctx.user.name}
+              email={ctx.user.email}
+              role={ctx.role}
+              orgName={ctx.organizationName}
+            />
+          </div>
         </header>
         <main className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
       </div>

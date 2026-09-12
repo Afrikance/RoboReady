@@ -26,8 +26,13 @@ import { getLatestProposal } from "@/app/actions/proposals"
 import { listPayments } from "@/app/actions/payments"
 import { getActiveSubscription } from "@/app/actions/subscriptions"
 import { ServicePlanPanel } from "@/components/plans/service-plan-panel"
-import { getOrgContext } from "@/lib/tenancy"
+import { getOrgContext, isClient } from "@/lib/tenancy"
 import { canUsePropertyTab, canManageTeam } from "@/lib/access"
+import { getAssessmentRunState } from "@/app/actions/assessment-run"
+import { getPurchasedTier } from "@/app/actions/payments"
+import { ClientAssessment } from "@/components/assessment/client-assessment"
+import { OfferAssessment } from "@/components/assessment/offer-assessment"
+import { isFieldRole } from "@/lib/tenancy"
 import { listAssignableStaff, listAssignmentsForProperty } from "@/app/actions/assignments"
 import { PropertyAssignments } from "@/components/property/property-assignments"
 import { intakeCompletion } from "@/lib/intake/questions"
@@ -51,6 +56,38 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const { id } = await params
   const property = await getProperty(id)
   if (!property) notFound()
+
+  // Clients (property owners) get a focused, self-service view: pay for an
+  // assessment, watch it run stage by stage, then download the report — not the
+  // 13-tab staff workspace. Staff fall through to the full view below.
+  const clientCtx = await getOrgContext()
+  if (clientCtx && isClient(clientCtx.role)) {
+    const [runState, purchasedTier] = await Promise.all([getAssessmentRunState(id), getPurchasedTier(id)])
+    const clientAddress = [property.addressLine1, property.city, property.region, property.country]
+      .filter(Boolean)
+      .join(", ")
+    return (
+      <div className="space-y-6">
+        <div>
+          <Link
+            href="/dashboard/properties"
+            className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" /> My properties
+          </Link>
+          <h1 className="text-2xl font-semibold tracking-tight text-balance">{property.name}</h1>
+          {clientAddress ? (
+            <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" /> {clientAddress}
+            </p>
+          ) : null}
+        </div>
+        <div className="mx-auto max-w-3xl">
+          <ClientAssessment propertyId={id} initialState={runState} purchasedTier={purchasedTier} />
+        </div>
+      </div>
+    )
+  }
 
   const [intake, docs, assessment, concept, plan, assets, reportCtx, wayfinding, accessibility, ev, proposal, payments, subscription, ctx] =
     await Promise.all([
@@ -78,6 +115,8 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   // Admins/owners manage which field staff are assigned to build out this
   // property. Load the assignment data only for them.
   const canAssign = ctx ? canManageTeam(ctx.role) : false
+  // Sales/admin staff (not field roles) can offer an assessment to a client.
+  const canOffer = ctx ? !isFieldRole(ctx.role) : false
   const [assignments, staff] = canAssign
     ? await Promise.all([listAssignmentsForProperty(id), listAssignableStaff()])
     : [[], []]
@@ -118,6 +157,17 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   const allPanels: Record<string, ReactNode> = {
     overview: (
       <div className="space-y-6">
+        {canOffer ? (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">
+            <div>
+              <p className="text-sm font-medium">Offer this assessment to a client</p>
+              <p className="text-xs text-muted-foreground text-pretty">
+                Invite the property owner to purchase and track their own RoboReady assessment.
+              </p>
+            </div>
+            <OfferAssessment propertyId={id} propertyName={property.name} />
+          </div>
+        ) : null}
         <OverviewPanel property={property} address={address} />
         {canAssign ? (
           <PropertyAssignments propertyId={id} assignments={assignments} staff={staff} />
