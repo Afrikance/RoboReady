@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { ensureOrganization } from "@/lib/tenancy"
-import { isOperator, canManageTeam, OPERATOR_HOME } from "@/lib/access"
+import { isClient, isOperator, canManageTeam, CLIENT_HOME, OPERATOR_HOME } from "@/lib/access"
 import { listInvites, listMembers } from "@/app/actions/team"
 import { TeamManager } from "@/components/team/team-manager"
 
@@ -8,6 +8,7 @@ export const metadata = { title: "Team" }
 
 export default async function TeamPage() {
   const ctx = await ensureOrganization()
+  if (isClient(ctx.role)) redirect(CLIENT_HOME)
   if (isOperator(ctx.role)) redirect(OPERATOR_HOME)
 
   const [members, invites] = await Promise.all([listMembers(), listInvites()])

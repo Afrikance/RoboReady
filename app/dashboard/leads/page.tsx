@@ -1,5 +1,8 @@
+import { redirect } from "next/navigation"
 import { Users } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
+import { ensureOrganization } from "@/lib/tenancy"
+import { isClient, CLIENT_HOME } from "@/lib/access"
 import { listLeads } from "@/app/actions/leads"
 import { NewLeadDialog } from "@/components/leads/new-lead-dialog"
 import { LeadBoard } from "@/components/leads/lead-board"
@@ -7,6 +10,9 @@ import { LeadBoard } from "@/components/leads/lead-board"
 export const metadata = { title: "Leads" }
 
 export default async function LeadsPage() {
+  const ctx = await ensureOrganization()
+  // The sales pipeline is a staff/field surface; Clients don't get it.
+  if (isClient(ctx.role)) redirect(CLIENT_HOME)
   const leads = await listLeads()
 
   return (

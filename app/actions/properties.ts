@@ -1,29 +1,40 @@
 "use server"
 
-import { and, desc, eq, inArray } from "drizzle-orm"
+import { and, desc, eq, inArray, type SQL } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { assessment, payment, property, propertyAssignment } from "@/lib/db/schema"
-import { assertRole, isFieldRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { isFieldRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { canCreateProspect } from "@/lib/access"
 import { tierRank, type AssessmentTierId } from "@/lib/products"
 
 /**
- * Property IDs a field-role user (operator/vendor/contractor) may see. Returns
- * null for non-field roles, meaning "no assignment filter — see all org
- * properties". Field roles with zero assignments get an empty array.
+ * Resolves how the current user's property queries should be narrowed within
+ * the shared org:
+ *  - Admins / Super Admin (and legacy members): see everything → no extra filter.
+ *  - Clients (property owners): see only the properties they created.
+ *  - Field roles (operator/vendor/contractor): see only assigned properties;
+ *    with zero assignments they are `blocked` and see nothing.
  */
-async function assignedPropertyIdsFor(ctx: OrgContext): Promise<string[] | null> {
-  if (!isFieldRole(ctx.role)) return null
-  const rows = await db
-    .select({ propertyId: propertyAssignment.propertyId })
-    .from(propertyAssignment)
-    .where(
-      and(
-        eq(propertyAssignment.organizationId, ctx.organizationId),
-        eq(propertyAssignment.userId, ctx.user.id),
-      ),
-    )
-  return rows.map((r) => r.propertyId)
+async function propertyScope(ctx: OrgContext): Promise<{ blocked: boolean; extra?: SQL }> {
+  if (isFieldRole(ctx.role)) {
+    const rows = await db
+      .select({ propertyId: propertyAssignment.propertyId })
+      .from(propertyAssignment)
+      .where(
+        and(
+          eq(propertyAssignment.organizationId, ctx.organizationId),
+          eq(propertyAssignment.userId, ctx.user.id),
+        ),
+      )
+    const ids = rows.map((r) => r.propertyId)
+    if (ids.length === 0) return { blocked: true }
+    return { blocked: false, extra: inArray(property.id, ids) }
+  }
+  if (ctx.role === "client") {
+    return { blocked: false, extra: eq(property.createdByUserId, ctx.user.id) }
+  }
+  return { blocked: false }
 }
 
 export type PropertyInput = {
@@ -50,16 +61,16 @@ export type ActionResult<T = undefined> =
 
 export async function listProperties() {
   const ctx = await requireOrgContext()
-  const assignedIds = await assignedPropertyIdsFor(ctx)
-  if (assignedIds !== null && assignedIds.length === 0) return []
+  const scope = await propertyScope(ctx)
+  if (scope.blocked) return []
 
   return db
     .select()
     .from(property)
     .where(
-      assignedIds === null
-        ? eq(property.organizationId, ctx.organizationId)
-        : and(eq(property.organizationId, ctx.organizationId), inArray(property.id, assignedIds)),
+      scope.extra
+        ? and(eq(property.organizationId, ctx.organizationId), scope.extra)
+        : eq(property.organizationId, ctx.organizationId),
     )
     .orderBy(desc(property.updatedAt))
 }
@@ -148,23 +159,28 @@ export async function listPropertiesForTable(): Promise<PropertyTableRow[]> {
 
 export async function getProperty(id: string) {
   const ctx = await requireOrgContext()
-  const assignedIds = await assignedPropertyIdsFor(ctx)
-  if (assignedIds !== null && !assignedIds.includes(id)) return null
+  const scope = await propertyScope(ctx)
+  if (scope.blocked) return null
 
   const rows = await db
     .select()
     .from(property)
-    .where(and(eq(property.id, id), eq(property.organizationId, ctx.organizationId)))
+    .where(
+      scope.extra
+        ? and(eq(property.id, id), eq(property.organizationId, ctx.organizationId), scope.extra)
+        : and(eq(property.id, id), eq(property.organizationId, ctx.organizationId)),
+    )
     .limit(1)
   return rows[0] ?? null
 }
 
 export async function createProperty(input: PropertyInput): Promise<ActionResult<{ id: string }>> {
   const ctx = await requireOrgContext()
-  try {
-    assertRole(ctx, "member")
-  } catch {
-    return { ok: false, error: "You do not have permission to add properties." }
+  // Any member of the org can add a property they own — Clients onboard their
+  // own buildings this way. Sending a property into the prospect database is a
+  // staff-only action, so gate that path separately.
+  if (input.asProspect && !canCreateProspect(ctx.role)) {
+    return { ok: false, error: "You do not have permission to add prospects." }
   }
 
   const name = input.name?.trim()

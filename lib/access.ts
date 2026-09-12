@@ -1,4 +1,4 @@
-import { isFieldRole, type Role } from "@/lib/roles"
+import { isClient, isFieldRole, type Role } from "@/lib/roles"
 
 /**
  * Field roles (Field Operator, Vendor, Contractor) are on-site staff who build
@@ -31,6 +31,21 @@ const ADMIN_ONLY_NAV_HREFS = new Set([
   "/dashboard/support",
 ])
 
+/**
+ * Dashboard sidebar destinations a Client (property owner) may open. Clients
+ * see their own portfolio and reports and manage their account — not the sales,
+ * field-work, prospecting, AI-ops, or team surfaces, which belong to staff.
+ */
+const CLIENT_NAV_HREFS = new Set([
+  "/dashboard",
+  "/dashboard/properties",
+  "/dashboard/reports",
+  "/dashboard/settings",
+])
+
+/** Where a Client is sent when they hit a page they cannot access. */
+export const CLIENT_HOME = "/dashboard"
+
 /** Property detail tabs a Field Operator may open. */
 const OPERATOR_PROPERTY_TABS = new Set(["intake", "documents"])
 
@@ -45,13 +60,22 @@ export function isAdminRole(role: Role): boolean {
   return role === "admin" || role === "owner"
 }
 
+// Re-export so pages can guard client-only redirects from a single module.
+export { isClient }
+
 export function canUseNavHref(role: Role, href: string): boolean {
   if (isFieldRole(role)) return OPERATOR_NAV_HREFS.has(href)
+  if (isClient(role)) return CLIENT_NAV_HREFS.has(href)
   // The field-work queue is a shared field-staff + admin surface; hide it from
   // ordinary members and clients.
   if (href === "/dashboard/handover") return isAdminRole(role)
   if (ADMIN_ONLY_NAV_HREFS.has(href)) return isAdminRole(role)
   return true
+}
+
+/** Adding a property to the prospect database is a staff (admin/owner) action. */
+export function canCreateProspect(role: Role): boolean {
+  return isAdminRole(role)
 }
 
 export function canUsePropertyTab(role: Role, tabId: string): boolean {

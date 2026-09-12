@@ -10,8 +10,27 @@ import { type Role } from "@/lib/roles"
 // Re-export the client-safe role primitives so existing `@/lib/tenancy`
 // importers keep working. The definitions live in lib/roles.ts (no server-only
 // deps) so the client bundle can share them.
-export { FIELD_ROLES, isFieldRole, ASSIGNABLE_ROLES, ROLE_LABELS } from "@/lib/roles"
+export { FIELD_ROLES, isFieldRole, ASSIGNABLE_ROLES, ROLE_LABELS, isClient } from "@/lib/roles"
 export type { Role, FieldRole } from "@/lib/roles"
+
+// RoboReady runs as a single shared platform organization rather than a
+// personal workspace per account. Everyone joins this one org; visibility is
+// controlled by role (see lib/access.ts) and per-user scoping (see the
+// property actions), not by separate tenants.
+export const PLATFORM_ORG_ID = "00000000-0000-4000-8000-000000000001"
+const PLATFORM_ORG_SLUG = "roboready"
+const PLATFORM_ORG_NAME = "RoboReady"
+
+/**
+ * The sole Super Admin (platform owner). Everyone else self-signing up becomes
+ * a Client. Overridable via env so the owner account can change without a code
+ * change; defaults to the designated launch owner.
+ */
+export const SUPER_ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL ?? "snapptech101@gmail.com").toLowerCase()
+
+export function isSuperAdminEmail(email: string): boolean {
+  return email.trim().toLowerCase() === SUPER_ADMIN_EMAIL
+}
 
 // Field roles (operator, vendor, contractor) collect / build out on-site work.
 // They share the "member" rank so existing `assertRole(ctx, "member")` gates
@@ -135,14 +154,38 @@ export async function recordAudit(input: {
   }
 }
 
+/** Find-or-create the single shared platform organization. Idempotent. */
+async function ensurePlatformOrg(createdByUserId: string): Promise<void> {
+  const existing = await db
+    .select({ id: organization.id })
+    .from(organization)
+    .where(eq(organization.id, PLATFORM_ORG_ID))
+    .limit(1)
+  if (existing[0]) return
+
+  try {
+    await db.insert(organization).values({
+      id: PLATFORM_ORG_ID,
+      name: PLATFORM_ORG_NAME,
+      slug: PLATFORM_ORG_SLUG,
+      createdByUserId,
+    })
+  } catch (err) {
+    // A concurrent request created it first — fine.
+    console.log("[v0] ensurePlatformOrg race:", (err as Error).message)
+  }
+}
+
 /**
- * Consumes the oldest pending invite matching this user's email, joining them
- * to that org with the invited role. This is how a Client / Field Operator /
- * Vendor / Contractor "logs in": an owner/admin invites their email, and on
- * first entry the invite becomes their membership instead of a personal org.
- * Returns the resulting OrgContext, or null when there is no pending invite.
+ * Consumes the oldest pending invite matching this user's email and returns the
+ * role it grants. This is how a Client / Field Operator / Vendor / Contractor /
+ * Sub-Admin is provisioned: a Super Admin or Sub-Admin invites their email, and
+ * on first entry the invite decides their role in the shared org. An invite can
+ * never mint the Super Admin (owner) — that is reserved for the one designated
+ * account — so an "owner" invite is downgraded to Sub-Admin. Returns null when
+ * there is no pending invite.
  */
-async function acceptPendingInviteFor(user: SessionUser): Promise<OrgContext | null> {
+async function consumePendingInviteRole(user: SessionUser): Promise<Role | null> {
   const pending = await db
     .select()
     .from(invite)
@@ -153,25 +196,13 @@ async function acceptPendingInviteFor(user: SessionUser): Promise<OrgContext | n
   const row = pending[0]
   if (!row) return null
 
-  try {
-    await db.insert(membership).values({
-      id: crypto.randomUUID(),
-      organizationId: row.organizationId,
-      userId: user.id,
-      role: row.role,
-    })
-  } catch (err) {
-    // Already a member (unique orgUser) — fine, just mark the invite accepted.
-    console.log("[v0] invite membership existed:", (err as Error).message)
-  }
-
   await db
     .update(invite)
     .set({ status: "accepted", acceptedByUserId: user.id, acceptedAt: new Date() })
     .where(eq(invite.id, row.id))
 
   await recordAudit({
-    organizationId: row.organizationId,
+    organizationId: PLATFORM_ORG_ID,
     userId: user.id,
     action: "invite.accepted",
     entityType: "invite",
@@ -179,52 +210,55 @@ async function acceptPendingInviteFor(user: SessionUser): Promise<OrgContext | n
     metadata: { role: row.role },
   })
 
-  return getOrgContext()
+  return row.role === "owner" ? "admin" : (row.role as Role)
 }
 
 /**
- * Guarantees the signed-in user has an organization. Called after auth to
- * lazily provision membership on first entry. Prefers accepting a pending
- * invite (joining an existing org with the invited role); only when there is
- * none does it provision a personal org owned by the user. Idempotent.
+ * Guarantees the signed-in user is a member of the shared platform org. Called
+ * after auth to lazily provision membership on first entry. Role resolution:
+ * the single Super Admin email always becomes owner; otherwise a pending invite
+ * decides the role; otherwise the account defaults to Client. Idempotent, and
+ * it keeps the Super Admin's membership correct if it predates this model.
  */
-export async function ensureOrganization(name?: string): Promise<OrgContext> {
+export async function ensureOrganization(): Promise<OrgContext> {
   const user = await requireUser()
+  await ensurePlatformOrg(user.id)
+
   const existing = await getOrgContext()
-  if (existing) return existing
+  if (existing) {
+    if (isSuperAdminEmail(user.email) && existing.role !== "owner") {
+      await db.update(membership).set({ role: "owner" }).where(eq(membership.userId, user.id))
+      return { ...existing, role: "owner" }
+    }
+    return existing
+  }
 
-  const invited = await acceptPendingInviteFor(user)
-  if (invited) return invited
-
-  const orgId = crypto.randomUUID()
-  const orgName = name?.trim() || `${user.name.split(" ")[0]}'s Workspace`
-  const slug = `${orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${orgId.slice(0, 6)}`
+  let role: Role = "client"
+  if (isSuperAdminEmail(user.email)) {
+    role = "owner"
+  } else {
+    const invitedRole = await consumePendingInviteRole(user)
+    if (invitedRole) role = invitedRole
+  }
 
   try {
-    await db.insert(organization).values({
-      id: orgId,
-      name: orgName,
-      slug,
-      createdByUserId: user.id,
-    })
-
     await db.insert(membership).values({
       id: crypto.randomUUID(),
-      organizationId: orgId,
+      organizationId: PLATFORM_ORG_ID,
       userId: user.id,
-      role: "owner",
+      role,
     })
 
     await recordAudit({
-      organizationId: orgId,
+      organizationId: PLATFORM_ORG_ID,
       userId: user.id,
-      action: "organization.created",
-      entityType: "organization",
-      entityId: orgId,
+      action: "membership.created",
+      entityType: "membership",
+      metadata: { role },
     })
   } catch (err) {
     // A concurrent request (page + layout render at the same time) may have
-    // provisioned the org first, tripping the membership unique constraint.
+    // provisioned the membership first, tripping the unique constraint.
     // Re-read and return the winner rather than failing.
     console.log("[v0] ensureOrganization race, re-reading:", (err as Error).message)
     const raced = await getOrgContext()
@@ -234,9 +268,9 @@ export async function ensureOrganization(name?: string): Promise<OrgContext> {
 
   return {
     user,
-    organizationId: orgId,
-    organizationName: orgName,
-    role: "owner",
+    organizationId: PLATFORM_ORG_ID,
+    organizationName: PLATFORM_ORG_NAME,
+    role,
     logoUrl: null,
   }
 }
