@@ -206,6 +206,34 @@ export const assessment = pgTable("assessment", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
+// Tracks one paid AI assessment from payment to a downloadable report. This is
+// the state machine the client watches on their progress tracker. Stage order:
+// queued -> analyzing -> designing -> planning -> reporting -> ready. The
+// lockedAt column is a short self-heal lock so a stalled run can be reclaimed
+// and resumed (see lib/assessment/lifecycle.ts).
+export const assessmentRun = pgTable("assessment_run", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  createdByUserId: text("createdByUserId").notNull(),
+  // Which payment unlocked this run (kind='assessment').
+  paymentId: text("paymentId"),
+  // basic | standard | pro (mirrors the purchased tier).
+  tier: text("tier").notNull().default("basic"),
+  // queued | analyzing | designing | planning | reporting | ready | failed
+  stage: text("stage").notNull().default("queued"),
+  // The assessment row produced once reporting completes.
+  assessmentId: text("assessmentId"),
+  error: text("error"),
+  // Self-heal lock: a worker stamps this when it starts a step; a stale stamp
+  // (older than the lock window) means the worker died and the run can resume.
+  lockedAt: timestamp("lockedAt"),
+  startedAt: timestamp("startedAt"),
+  readyAt: timestamp("readyAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
 export const siteConcept = pgTable("site_concept", {
   id: text("id").primaryKey(),
   organizationId: text("organizationId").notNull(),
@@ -434,6 +462,11 @@ export const invite = pgTable("invite", {
   status: text("status").notNull().default("pending"),
   invitedByUserId: text("invitedByUserId").notNull(),
   acceptedByUserId: text("acceptedByUserId"),
+  // Solicited flow: staff pre-assess a property and invite the owner to buy an
+  // assessment for it. These carry which property the invite is about and which
+  // tier is being offered, so acceptance links the client to that property.
+  propertyId: text("propertyId"),
+  offeredTier: text("offeredTier"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   acceptedAt: timestamp("acceptedAt"),
 })
@@ -470,4 +503,25 @@ export const evPlan = pgTable("ev_plan", {
   version: integer("version").notNull().default(1),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// ---------------------------------------------------------------------------
+// In-app notifications (bell + feed). Written whenever a client- or staff-
+// facing event happens (assessment paid, stage advanced, report ready, an
+// assessment offered). Email delivery is layered on best-effort separately.
+// ---------------------------------------------------------------------------
+export const notification = pgTable("notification", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  // Recipient.
+  userId: text("userId").notNull(),
+  // assessment_paid | assessment_stage | assessment_ready | assessment_offer | assessment_failed
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  body: text("body"),
+  // Optional deep link (e.g. /dashboard/properties/<id> or /portal/<id>).
+  href: text("href"),
+  propertyId: text("propertyId"),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
 })

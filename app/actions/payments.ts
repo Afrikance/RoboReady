@@ -2,11 +2,14 @@
 
 import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
+import { after } from "next/server"
 import { db } from "@/lib/db"
 import { payment, property, proposal } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { assertRole, isClient, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
 import { stripe } from "@/lib/stripe"
 import { getAssessmentTier, tierRank, type AssessmentTierId } from "@/lib/products"
+import { startAssessmentRun, runAssessmentToCompletion } from "@/lib/assessment/lifecycle"
+import { createNotification } from "@/lib/notifications"
 import type { ActionResult } from "@/app/actions/properties"
 
 export type CheckoutStart = { clientSecret: string; paymentId: string }
@@ -72,7 +75,6 @@ export async function startAssessmentCheckout(
   tierId: AssessmentTierId,
 ): Promise<CheckoutStart> {
   const ctx = await requireOrgContext()
-  assertRole(ctx, "member")
 
   const [prop] = await db
     .select()
@@ -80,6 +82,13 @@ export async function startAssessmentCheckout(
     .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
     .limit(1)
   if (!prop) throw new Error("Property not found.")
+
+  // Clients (property owners) may buy assessments for their OWN properties;
+  // staff (member and up) may buy for any property in the org. This is the
+  // self-service entry point, so it must not be gated above the client role.
+  if (isClient(ctx.role) && prop.createdByUserId !== ctx.user.id) {
+    throw new Error("You can only purchase assessments for your own properties.")
+  }
 
   const tier = getAssessmentTier(tierId)
   if (!tier) throw new Error("Unknown assessment tier.")
@@ -156,6 +165,10 @@ export async function confirmPayment(paymentId: string): Promise<ActionResult<{ 
     .where(and(eq(payment.id, paymentId), eq(payment.organizationId, ctx.organizationId)))
     .limit(1)
   if (!row) return { ok: false, error: "Payment not found." }
+  // A client may only confirm their own payments.
+  if (isClient(ctx.role) && row.createdByUserId !== ctx.user.id) {
+    return { ok: false, error: "Payment not found." }
+  }
   if (row.status === "paid") return { ok: true, data: { status: "paid" } }
   if (!row.stripeSessionId) return { ok: false, error: "Payment is not linked to a checkout session." }
 
@@ -184,6 +197,37 @@ export async function confirmPayment(paymentId: string): Promise<ActionResult<{ 
         .set({ status: "active", updatedAt: new Date() })
         .where(and(eq(property.id, row.propertyId), eq(property.organizationId, ctx.organizationId)))
     }
+  }
+
+  // The missing link: a paid assessment auto-starts the AI assessment and moves
+  // the client's progress tracker forward. The run is created synchronously (so
+  // the tracker shows immediately), the client is notified, and completion runs
+  // in the background — the tracker also re-kicks it if it ever stalls.
+  if (row.kind === "assessment" && row.propertyId) {
+    const run = await startAssessmentRun({
+      organizationId: ctx.organizationId,
+      propertyId: row.propertyId,
+      userId: row.createdByUserId,
+      tier: row.tier ?? "basic",
+      paymentId: row.id,
+    })
+    await createNotification({
+      organizationId: ctx.organizationId,
+      userId: row.createdByUserId,
+      type: "assessment_paid",
+      title: "Payment received — your assessment has started",
+      body: "Our AI workforce is now assessing your property. We'll notify you as each stage completes.",
+      href: `/dashboard/properties/${row.propertyId}`,
+      propertyId: row.propertyId,
+    })
+    const runId = run.id
+    after(async () => {
+      try {
+        await runAssessmentToCompletion(runId)
+      } catch (err) {
+        console.log("[v0] background assessment run failed:", (err as Error).message)
+      }
+    })
   }
 
   await recordAudit({

@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { auditLog, invite, membership, organization } from "@/lib/db/schema"
+import { auditLog, invite, membership, organization, property } from "@/lib/db/schema"
 import { type Role } from "@/lib/roles"
 
 // Re-export the client-safe role primitives so existing `@/lib/tenancy`
@@ -201,13 +201,27 @@ async function consumePendingInviteRole(user: SessionUser): Promise<Role | null>
     .set({ status: "accepted", acceptedByUserId: user.id, acceptedAt: new Date() })
     .where(eq(invite.id, row.id))
 
+  // Solicited flow: an invite that names a property hands that property to the
+  // accepting client so it shows up in their portfolio and passes the per-user
+  // ownership checks that gate purchase + tracking.
+  if (row.propertyId) {
+    try {
+      await db
+        .update(property)
+        .set({ createdByUserId: user.id, updatedAt: new Date() })
+        .where(eq(property.id, row.propertyId))
+    } catch (err) {
+      console.log("[v0] invite property handover failed:", (err as Error).message)
+    }
+  }
+
   await recordAudit({
     organizationId: PLATFORM_ORG_ID,
     userId: user.id,
     action: "invite.accepted",
     entityType: "invite",
     entityId: row.id,
-    metadata: { role: row.role },
+    metadata: { role: row.role, propertyId: row.propertyId ?? undefined },
   })
 
   return row.role === "owner" ? "admin" : (row.role as Role)
