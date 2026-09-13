@@ -161,9 +161,23 @@ export default async function LandingPage() {
                 </div>
               ))}
             </div>
+            {/* <p className="mt-8 text-center text-sm text-muted-foreground text-pretty">
+              Need ongoing monitoring or maintenance? Ask about our Care plans after your assessment, Powered by StaffGPT AI Workforce Technology.
+            </p> */}
             <p className="mt-8 text-center text-sm text-muted-foreground text-pretty">
-              Need ongoing monitoring or maintenance? Ask about our Care plans after your assessment.
-            </p>
+  Need ongoing monitoring or maintenance? Ask about our Care plans after your
+  assessment, Powered by{" "}
+  <a
+    href="https://www.staffgpt.net"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="text-primary hover:underline"
+  >
+    StaffGPT
+  </a>{" "}
+  AI Workforce Technology.
+</p>
+
           </div>
         </section>
       </main>

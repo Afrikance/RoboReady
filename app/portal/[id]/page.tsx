@@ -1,9 +1,12 @@
+import Link from "next/link"
+import { ArrowLeft } from "lucide-react"
 import { notFound, redirect } from "next/navigation"
 import { getSessionUser } from "@/lib/tenancy"
 import { buildReportContext } from "@/app/actions/report"
 import { ReportView } from "@/components/report/report-view"
 import { PrintTrigger } from "@/components/report/print-trigger"
 import { Logo } from "@/components/brand/logo"
+import { Button } from "@/components/ui/button"
 
 export const metadata = { title: "RoboReady — Client Report" }
 
@@ -20,7 +23,14 @@ export default async function PortalPage({ params }: { params: Promise<{ id: str
       <header className="border-b border-border bg-background print:hidden">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <Logo />
-          <PrintTrigger />
+          <div className="flex items-center gap-2">
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/dashboard/reports">
+                <ArrowLeft className="mr-1.5 h-4 w-4" /> Back to workspace
+              </Link>
+            </Button>
+            <PrintTrigger />
+          </div>
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-6 py-10">
