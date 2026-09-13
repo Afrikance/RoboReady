@@ -11,6 +11,7 @@ import {
   property,
   siteConcept,
 } from "@/lib/db/schema"
+import { evaluateReferralEligibility } from "@/lib/cyber-fleet-server"
 import { runJob } from "@/lib/ai/orchestrator"
 import {
   computeRoboReadyScore,
@@ -310,6 +311,14 @@ async function stepFinalize(run: Run): Promise<void> {
     .update(property)
     .set({ status: "assessed", updatedAt: new Date() })
     .where(and(eq(property.id, run.propertyId), eq(property.organizationId, run.organizationId)))
+
+  // Partner monetization: if the finalized score qualifies, open a Cyber Fleet
+  // referral and notify the owner. Best-effort — never blocks finalize.
+  await evaluateReferralEligibility({
+    organizationId: run.organizationId,
+    propertyId: run.propertyId,
+    ownerUserId: run.createdByUserId,
+  })
 }
 
 /** Existence-based resume: decides the next action from persisted artifacts. */

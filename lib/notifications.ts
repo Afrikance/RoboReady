@@ -10,6 +10,7 @@ export type NotificationType =
   | "assessment_ready"
   | "assessment_failed"
   | "assessment_offer"
+  | "cyber_fleet_eligible"
 
 export type CreateNotificationInput = {
   organizationId: string

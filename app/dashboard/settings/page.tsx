@@ -1,10 +1,13 @@
 import Link from "next/link"
-import { FileText, FileDown, Building2, Palette } from "lucide-react"
+import { FileText, FileDown, Building2, Palette, Bot } from "lucide-react"
 import { ensureOrganization } from "@/lib/tenancy"
 import { listProperties } from "@/app/actions/properties"
 import { canDownloadBlankIntake, canDownloadFilledIntake } from "@/lib/intake/access"
-import { canManageTeam } from "@/lib/access"
+import { canManageTeam, isAdminRole } from "@/lib/access"
 import { LogoUploader } from "@/components/branding/logo-uploader"
+import { PartnerSettingsForm } from "@/components/cyber-fleet/partner-settings-form"
+import { getPartnerSettings } from "@/app/actions/cyber-fleet"
+import { PARTNER } from "@/lib/cyber-fleet"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
@@ -26,7 +29,9 @@ export default async function SettingsPage() {
   const canBlank = canDownloadBlankIntake(ctx.role)
   const canFilled = canDownloadFilledIntake(ctx.role)
   const canBrand = canManageTeam(ctx.role)
+  const canPartner = isAdminRole(ctx.role)
   const properties = canFilled ? await listProperties() : []
+  const partnerRange = canPartner ? await getPartnerSettings() : null
 
   return (
     <div className="space-y-6">
@@ -48,6 +53,19 @@ export default async function SettingsPage() {
             Customize the logo shown across your workspace. Admins and owners only.
           </p>
           <LogoUploader initialLogoUrl={ctx.logoUrl} />
+        </section>
+      ) : null}
+
+      {canPartner && partnerRange ? (
+        <section className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">{PARTNER.name} referrals</h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Control the partner referral offer shown to owners after an assessment. Admins and owners only.
+          </p>
+          <PartnerSettingsForm initial={partnerRange} />
         </section>
       ) : null}
 

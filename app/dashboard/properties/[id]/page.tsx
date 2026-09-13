@@ -31,6 +31,7 @@ import { canUsePropertyTab, canManageTeam } from "@/lib/access"
 import { getAssessmentRunState } from "@/app/actions/assessment-run"
 import { getPurchasedTier } from "@/app/actions/payments"
 import { ClientAssessment } from "@/components/assessment/client-assessment"
+import { getCyberFleetCtaData } from "@/app/actions/cyber-fleet"
 import { OfferAssessment } from "@/components/assessment/offer-assessment"
 import { isFieldRole } from "@/lib/tenancy"
 import { listAssignableStaff, listAssignmentsForProperty } from "@/app/actions/assignments"
@@ -62,7 +63,11 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
   // 13-tab staff workspace. Staff fall through to the full view below.
   const clientCtx = await getOrgContext()
   if (clientCtx && isClient(clientCtx.role)) {
-    const [runState, purchasedTier] = await Promise.all([getAssessmentRunState(id), getPurchasedTier(id)])
+    const [runState, purchasedTier, cyberFleet] = await Promise.all([
+      getAssessmentRunState(id),
+      getPurchasedTier(id),
+      getCyberFleetCtaData(id),
+    ])
     const clientAddress = [property.addressLine1, property.city, property.region, property.country]
       .filter(Boolean)
       .join(", ")
@@ -83,7 +88,12 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
           ) : null}
         </div>
         <div className="mx-auto max-w-3xl">
-          <ClientAssessment propertyId={id} initialState={runState} purchasedTier={purchasedTier} />
+          <ClientAssessment
+            propertyId={id}
+            initialState={runState}
+            purchasedTier={purchasedTier}
+            cyberFleet={cyberFleet}
+          />
         </div>
       </div>
     )

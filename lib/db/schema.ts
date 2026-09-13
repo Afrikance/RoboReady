@@ -515,7 +515,7 @@ export const notification = pgTable("notification", {
   organizationId: text("organizationId").notNull(),
   // Recipient.
   userId: text("userId").notNull(),
-  // assessment_paid | assessment_stage | assessment_ready | assessment_offer | assessment_failed
+  // assessment_paid | assessment_stage | assessment_ready | assessment_offer | assessment_failed | cyber_fleet_eligible
   type: text("type").notNull(),
   title: text("title").notNull(),
   body: text("body"),
@@ -525,3 +525,64 @@ export const notification = pgTable("notification", {
   readAt: timestamp("readAt"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// Partner monetization: Cyber Fleet Services referrals
+//
+// After an assessment finalizes, properties whose RoboReady Score falls in the
+// org's qualifying range are offered a referral to the security/robotics
+// partner (Cyber Fleet Services). The economics ($500 lead fee, $2,500
+// development fee, 2% revenue share) live in docs/partnerships and are NOT
+// tracked in-app yet — this table only models the referral handoff pipeline.
+// ---------------------------------------------------------------------------
+export const cyberFleetReferral = pgTable(
+  "cyber_fleet_referral",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    propertyId: text("propertyId").notNull(),
+    // The assessment + score snapshot that made this property eligible.
+    assessmentId: text("assessmentId"),
+    roboReadyScore: integer("roboReadyScore"),
+    // The property owner this referral belongs to (nullable for staff-created props).
+    ownerUserId: text("ownerUserId"),
+    createdByUserId: text("createdByUserId").notNull(),
+    // eligible | requested | accepted | rejected | deal | dismissed
+    status: text("status").notNull().default("eligible"),
+    // Contact details captured when the owner requests the evaluation.
+    contactName: text("contactName"),
+    contactEmail: text("contactEmail"),
+    contactPhone: text("contactPhone"),
+    notes: text("notes"),
+    requestedAt: timestamp("requestedAt"),
+    decidedAt: timestamp("decidedAt"),
+    // Throttles the manual "send reminder" admin action.
+    lastReminderAt: timestamp("lastReminderAt"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    // One referral per property; the finalize step upserts on this.
+    onesPerProperty: unique().on(t.propertyId),
+  }),
+)
+
+// Org-level, admin-editable partner configuration. One row per organization.
+export const partnerSetting = pgTable(
+  "partner_setting",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    // Whether the Cyber Fleet referral offer is active for this workspace.
+    cyberFleetEnabled: boolean("cyberFleetEnabled").notNull().default(true),
+    // Inclusive RoboReady Score range that qualifies a property (default 50-100).
+    qualifyMinScore: integer("qualifyMinScore").notNull().default(50),
+    qualifyMaxScore: integer("qualifyMaxScore").notNull().default(100),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    onePerOrg: unique().on(t.organizationId),
+  }),
+)

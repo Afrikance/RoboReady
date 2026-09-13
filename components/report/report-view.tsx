@@ -1,6 +1,8 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
 import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
 import { PlanSchematic } from "@/components/plans/plan-schematic"
+import { CyberFleetCta } from "@/components/cyber-fleet/cyber-fleet-cta"
+import type { ReferralCtaData } from "@/lib/cyber-fleet"
 import { Lock } from "lucide-react"
 import {
   getAssessmentTier,
@@ -59,6 +61,10 @@ export type ReportContext = {
   } | null
   assets: Array<{ label: string; assetType: string; quantity: number; unitCost: string | null }>
   report: ReportData | null
+  /** Property id, needed for the partner referral CTA action. */
+  propertyId: string
+  /** Partner referral offer state (null when not applicable). */
+  cyberFleet: ReferralCtaData | null
 }
 
 /** A tasteful placeholder shown where a section would be, gated behind a higher tier. */
@@ -277,6 +283,9 @@ export function ReportView({ ctx, enforce = false }: { ctx: ReportContext; enfor
           </ul>
         </section>
       ) : null}
+
+      {/* Partner referral offer — client-facing surfaces only, hidden in print. */}
+      {enforce && ctx.cyberFleet ? <CyberFleetCta propertyId={ctx.propertyId} data={ctx.cyberFleet} /> : null}
     </article>
   )
 }
