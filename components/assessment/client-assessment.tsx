@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation"
 import { CheckCircle2, Circle, Loader2, AlertTriangle, FileText, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { TierPicker } from "@/components/assessment/tier-picker"
+import { CyberFleetCta } from "@/components/cyber-fleet/cyber-fleet-cta"
+import type { ReferralCtaData } from "@/lib/cyber-fleet"
 import {
   getAssessmentRunState,
   resumeAssessmentRun,
@@ -28,10 +30,12 @@ export function ClientAssessment({
   propertyId,
   initialState,
   purchasedTier,
+  cyberFleet,
 }: {
   propertyId: string
   initialState: AssessmentRunState
   purchasedTier: AssessmentTierId | null
+  cyberFleet?: ReferralCtaData | null
 }) {
   const router = useRouter()
   const [state, setState] = useState<AssessmentRunState>(initialState)
@@ -109,7 +113,7 @@ export function ClientAssessment({
   }
 
   if (state.stage === "ready") {
-    return <ReadyState propertyId={propertyId} />
+    return <ReadyState propertyId={propertyId} cyberFleet={cyberFleet} />
   }
 
   return <Tracker stage={state.stage} />
@@ -194,23 +198,27 @@ function Tracker({ stage }: { stage: AssessmentStage }) {
   )
 }
 
-function ReadyState({ propertyId }: { propertyId: string }) {
+function ReadyState({ propertyId, cyberFleet }: { propertyId: string; cyberFleet?: ReferralCtaData | null }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-[var(--score-high)]/40 bg-[var(--score-high)]/5 px-6 py-10 text-center">
-      <span className="flex size-12 items-center justify-center rounded-full bg-[var(--score-high)]/15 text-[var(--score-high)]">
-        <CheckCircle2 className="size-6" />
-      </span>
-      <h2 className="mt-4 text-lg font-semibold text-balance">Your assessment is ready</h2>
-      <p className="mt-1 max-w-md text-sm text-muted-foreground text-pretty">
-        Your RoboReady report is complete. View it online or download a PDF to share with your team and contractors.
-      </p>
-      <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
-        <Button asChild>
-          <Link href={`/portal/${propertyId}`}>
-            <FileText className="mr-2 size-4" /> View &amp; download report
-          </Link>
-        </Button>
+    <div className="space-y-6">
+      <div className="flex flex-col items-center rounded-xl border border-[var(--score-high)]/40 bg-[var(--score-high)]/5 px-6 py-10 text-center">
+        <span className="flex size-12 items-center justify-center rounded-full bg-[var(--score-high)]/15 text-[var(--score-high)]">
+          <CheckCircle2 className="size-6" />
+        </span>
+        <h2 className="mt-4 text-lg font-semibold text-balance">Your assessment is ready</h2>
+        <p className="mt-1 max-w-md text-sm text-muted-foreground text-pretty">
+          Your RoboReady report is complete. View it online or download a PDF to share with your team and contractors.
+        </p>
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-3">
+          <Button asChild>
+            <Link href={`/portal/${propertyId}`}>
+              <FileText className="mr-2 size-4" /> View &amp; download report
+            </Link>
+          </Button>
+        </div>
       </div>
+
+      {cyberFleet ? <CyberFleetCta propertyId={propertyId} data={cyberFleet} /> : null}
     </div>
   )
 }

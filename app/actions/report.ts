@@ -7,6 +7,7 @@ import { assessment, siteConcept, infrastructureAsset, payment, property, proper
 import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { reportFeaturesForTier, tierRank, type AssessmentTierId } from "@/lib/products"
 import { runJob } from "@/lib/ai/orchestrator"
+import { buildReferralCtaData } from "@/lib/cyber-fleet-server"
 import type { ReportOutput } from "@/lib/ai/schemas"
 import type { ActionResult } from "@/app/actions/properties"
 import type { ReportContext } from "@/components/report/report-view"
@@ -78,7 +79,17 @@ export async function buildReportContext(propertyId: string): Promise<ReportCont
     if (r.tier && tierRank(r.tier) > tierRank(purchasedTier)) purchasedTier = r.tier as AssessmentTierId
   }
 
+  const cyberFleet = await buildReferralCtaData({
+    organizationId: ctx.organizationId,
+    propertyId,
+    score: assess?.roboReadyScore ?? null,
+    userName: ctx.user.name,
+    userEmail: ctx.user.email,
+  })
+
   return {
+    propertyId,
+    cyberFleet,
     tier: purchasedTier,
     entitled: [...reportFeaturesForTier(purchasedTier)],
     propertyName: prop.name,
