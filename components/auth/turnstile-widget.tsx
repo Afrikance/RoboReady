@@ -2,7 +2,11 @@
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react"
 
-const SITE_KEY = process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY
+// Public Cloudflare Turnstile sitekey for this widget. Sitekeys are public
+// (they ship in the browser), so this is intentionally in code rather than an
+// env var — the NEXT_PUBLIC_TURNSTILE_SITE_KEY var proved unreliable to keep in
+// sync. The private secret still lives server-side in TURNSTILE_SECRET_KEY.
+const SITE_KEY = "0x4AAAAAAEjLnDp1B4-RZJCy"
 const SCRIPT_SRC = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit"
 
 type TurnstileApi = {
