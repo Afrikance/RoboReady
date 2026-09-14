@@ -54,6 +54,8 @@ export const TurnstileWidget = forwardRef<TurnstileHandle, { onToken: (token: st
         widgetIdRef.current = window.turnstile.render(containerRef.current, {
           sitekey: SITE_KEY,
           theme: "auto",
+          // Turnstile Spin telemetry marker (account-level aggregate only).
+          action: "turnstile-spin-v2",
           callback: (token: string) => onTokenRef.current(token),
           "expired-callback": () => onTokenRef.current(""),
           "error-callback": () => onTokenRef.current(""),
