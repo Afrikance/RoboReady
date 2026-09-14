@@ -1,6 +1,20 @@
 import { betterAuth } from "better-auth"
 import { nextCookies } from "better-auth/next-js"
+import { captcha } from "better-auth/plugins"
 import { pool } from "@/lib/db"
+
+// Cloudflare Turnstile protection for sign-in / sign-up. Only enabled when the
+// secret key is present so the app keeps working before the key is configured.
+// The client sends the token in the `x-captcha-response` header; the plugin
+// verifies it against Cloudflare and rejects the request if it fails.
+const captchaPlugins = process.env.TURNSTILE_SECRET_KEY
+  ? [
+      captcha({
+        provider: "cloudflare-turnstile",
+        secretKey: process.env.TURNSTILE_SECRET_KEY,
+      }),
+    ]
+  : []
 
 export const auth = betterAuth({
   database: pool,
@@ -50,5 +64,6 @@ export const auth = betterAuth({
         },
       }
     : {}),
-  plugins: [nextCookies()],
+  // nextCookies() must remain last so Set-Cookie headers reach Next.js.
+  plugins: [...captchaPlugins, nextCookies()],
 })
