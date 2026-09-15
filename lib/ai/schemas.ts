@@ -125,6 +125,194 @@ export function computeRoboReadyScore(
   return { total: Math.max(0, Math.min(100, total)), clamped }
 }
 
+// ---------------------------------------------------------------------------
+// Premium Assessment — multi-domain readiness roll-up (100 points, 5 domains)
+// ---------------------------------------------------------------------------
+// Premium is the top tier. It PRESERVES the canonical 8-category robotaxi score
+// above and nests it as Domain 1 ("Autonomous Arrival"), rescaled to a 30-pt
+// weight. Domains 2-5 (EV, Robotics, Delivery, AI-Ops) are scored by the AI as
+// individual graded key points. The platform owns the arithmetic exactly like
+// computeRoboReadyScore: the model proposes per-key-point points, the platform
+// clamps each to its cap and sums into domain subtotals and the overall.
+
+export const PREMIUM_DOMAIN_DEFS = [
+  { id: "arrival", label: "Autonomous Arrival (Robotaxi / CyberCab)", max: 30, derived: true },
+  { id: "ev", label: "EV & Charging Network Infrastructure", max: 25, derived: false },
+  { id: "robotics", label: "Physical AI & Robotics Readiness", max: 20, derived: false },
+  { id: "delivery", label: "Autonomous Delivery Readiness", max: 20, derived: false },
+  { id: "aiops", label: "AI-Enabled Operations & Building Automation", max: 5, derived: false },
+] as const
+export type PremiumDomainId = (typeof PREMIUM_DOMAIN_DEFS)[number]["id"]
+
+// Every graded key point in domains 2-5, with its point cap. Domain 1's detail
+// is the existing 8-category robotaxi breakdown, so it isn't re-listed here.
+export const PREMIUM_KEYPOINT_DEFS = [
+  // Domain 2 — EV & Charging Network (25)
+  { id: "ev-electrical", domain: "ev", label: "Electrical service & spare capacity", max: 6 },
+  { id: "ev-stalls", domain: "ev", label: "Existing charging stalls", max: 4 },
+  { id: "ev-dcfast", domain: "ev", label: "DC fast-charging feasibility", max: 5 },
+  { id: "ev-network", domain: "ev", label: "Charging network site suitability", max: 4 },
+  { id: "ev-storage", domain: "ev", label: "Energy storage / solar / resilience", max: 3 },
+  { id: "ev-grid", domain: "ev", label: "Grid-upgrade & expansion path", max: 3 },
+  // Domain 3 — Physical AI & Robotics (20)
+  { id: "rob-workflows", domain: "robotics", label: "Repetitive / automatable workflows", max: 4 },
+  { id: "rob-environment", domain: "robotics", label: "Operating environment", max: 4 },
+  { id: "rob-routes", domain: "robotics", label: "Internal access & route continuity", max: 4 },
+  { id: "rob-staffing", domain: "robotics", label: "Staffing patterns & human-robot handoff", max: 3 },
+  { id: "rob-docking", domain: "robotics", label: "Robot charging / storage / docking", max: 3 },
+  { id: "rob-connectivity", domain: "robotics", label: "Connectivity & positioning for robots", max: 2 },
+  // Domain 4 — Autonomous Delivery (20)
+  { id: "del-access", domain: "delivery", label: "Site access (device / van)", max: 3 },
+  { id: "del-routes", domain: "delivery", label: "Sidewalks / routes / pedestrian environment", max: 4 },
+  { id: "del-handoff", domain: "delivery", label: "Delivery handoff", max: 3 },
+  { id: "del-loading", domain: "delivery", label: "Loading areas", max: 3 },
+  { id: "del-building", domain: "delivery", label: "Building access", max: 3 },
+  { id: "del-security", domain: "delivery", label: "Security", max: 2 },
+  { id: "del-ops", domain: "delivery", label: "Operational workflows & storage", max: 2 },
+  // Domain 5 — AI-Enabled Operations & Building Automation (5)
+  { id: "ops-bms", domain: "aiops", label: "BMS / building-automation integration", max: 2 },
+  { id: "ops-telemetry", domain: "aiops", label: "Data / telemetry & operational readiness", max: 2 },
+  { id: "ops-governance", domain: "aiops", label: "Governance / staffing for AI ops", max: 1 },
+] as const
+export type PremiumKeyPointId = (typeof PREMIUM_KEYPOINT_DEFS)[number]["id"]
+
+// The key points the AI scores (all of them — Domain 1 is derived, not scored).
+export const PREMIUM_SCORED_KEYPOINT_IDS = PREMIUM_KEYPOINT_DEFS.map((k) => k.id) as [
+  PremiumKeyPointId,
+  ...PremiumKeyPointId[],
+]
+
+const PREMIUM_KEYPOINT_BY_ID = new Map(PREMIUM_KEYPOINT_DEFS.map((k) => [k.id as string, k]))
+const PREMIUM_DOMAIN_BY_ID = new Map(PREMIUM_DOMAIN_DEFS.map((d) => [d.id as string, d]))
+
+export function premiumKeypointMax(id: string): number {
+  return PREMIUM_KEYPOINT_BY_ID.get(id)?.max ?? 0
+}
+export function premiumKeypointLabel(id: string): string {
+  return PREMIUM_KEYPOINT_BY_ID.get(id)?.label ?? id
+}
+export function premiumDomainLabel(id: string): string {
+  return PREMIUM_DOMAIN_BY_ID.get(id)?.label ?? id
+}
+export function premiumDomainMax(id: string): number {
+  return PREMIUM_DOMAIN_BY_ID.get(id)?.max ?? 0
+}
+
+export type LetterGrade = "A" | "B" | "C" | "D" | "F"
+
+/** Letter grade for points as a percent of a cap: A≥90 B≥80 C≥70 D≥60 F<60. */
+export function gradeFor(points: number, max: number): LetterGrade {
+  if (max <= 0) return "F"
+  const pct = (points / max) * 100
+  if (pct >= 90) return "A"
+  if (pct >= 80) return "B"
+  if (pct >= 70) return "C"
+  if (pct >= 60) return "D"
+  return "F"
+}
+
+export const premiumAssessmentSchema = z.object({
+  keyPointScores: z
+    .array(
+      z.object({
+        keyPointId: z.enum(PREMIUM_SCORED_KEYPOINT_IDS).describe("Which premium key point this scores."),
+        points: z
+          .number()
+          .min(0)
+          .max(10)
+          .describe("Points awarded within this key point's cap (caps range 1-6; the platform clamps to the real cap)."),
+        explanation: z.string().describe("Why this many points, grounded in the property/intake evidence."),
+        evidence: z
+          .array(z.string())
+          .describe("Specific intake/property facts used. Never fabricate; state when a fact is unknown."),
+        confidence: z.enum(CONFIDENCE_LEVELS),
+        recommendations: z.array(z.string()).describe("Concrete improvements that would raise this key point."),
+      }),
+    )
+    .describe("One entry per scored key point across the EV, Robotics, Delivery and AI-Ops domains."),
+  domainSummaries: z
+    .array(
+      z.object({
+        domain: z.enum(["ev", "robotics", "delivery", "aiops"]),
+        summary: z.string().describe("2-3 sentence readiness summary for this domain."),
+      }),
+    )
+    .describe("One summary per non-arrival domain."),
+  summary: z.string().describe("2-3 sentence executive summary across all five premium domains."),
+})
+export type PremiumAssessmentOutput = z.infer<typeof premiumAssessmentSchema>
+
+export type PremiumScoredKeyPoint = {
+  keyPointId: string
+  domain: PremiumDomainId
+  label: string
+  points: number
+  max: number
+  grade: LetterGrade
+}
+
+export type PremiumDomainScore = {
+  id: PremiumDomainId
+  label: string
+  points: number
+  max: number
+  pct: number
+  grade: LetterGrade
+  derived: boolean
+}
+
+/**
+ * Deterministically rolls up the Premium score. Domain 1 (arrival) is derived
+ * from the canonical 0-100 robotaxi score, rescaled to its 30-pt cap. Domains
+ * 2-5 sum their clamped key points. The platform — not the model — owns every
+ * total, so the overall always equals the sum of the domain subtotals.
+ */
+export function computePremiumScore(args: {
+  arrivalScore100: number
+  keyPoints: Array<{ keyPointId: string; points: number }>
+}): {
+  overall: number
+  domains: PremiumDomainScore[]
+  keyPoints: PremiumScoredKeyPoint[]
+} {
+  const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n))
+  const arrivalMax = premiumDomainMax("arrival")
+  const arrivalPoints = Math.round((clamp(Number(args.arrivalScore100) || 0, 0, 100) / 100) * arrivalMax)
+
+  const seen = new Set<string>()
+  const keyPoints: PremiumScoredKeyPoint[] = []
+  for (const kp of args.keyPoints ?? []) {
+    const def = PREMIUM_KEYPOINT_BY_ID.get(kp.keyPointId)
+    if (!def || seen.has(kp.keyPointId)) continue
+    seen.add(kp.keyPointId)
+    const points = clamp(Math.round(Number(kp.points) || 0), 0, def.max)
+    keyPoints.push({
+      keyPointId: def.id,
+      domain: def.domain as PremiumDomainId,
+      label: def.label,
+      points,
+      max: def.max,
+      grade: gradeFor(points, def.max),
+    })
+  }
+
+  const domains: PremiumDomainScore[] = PREMIUM_DOMAIN_DEFS.map((d) => {
+    const points =
+      d.id === "arrival"
+        ? arrivalPoints
+        : keyPoints.filter((k) => k.domain === d.id).reduce((s, k) => s + k.points, 0)
+    const pct = d.max > 0 ? Math.round((points / d.max) * 100) : 0
+    return { id: d.id, label: d.label, points, max: d.max, pct, grade: gradeFor(points, d.max), derived: d.derived }
+  })
+
+  const overall = clamp(
+    domains.reduce((s, d) => s + d.points, 0),
+    0,
+    100,
+  )
+  return { overall, domains, keyPoints }
+}
+
 export const siteConceptSchema = z.object({
   title: z.string(),
   narrative: z.string().describe("A few paragraphs describing the autonomous-arrival concept for this property."),

@@ -94,6 +94,58 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
     ],
   },
   {
+    id: "ev",
+    title: "EV & Charging Network Readiness",
+    description:
+      "Qualifies the property for EV infrastructure and as a charging network site — property-wide electrical capacity, existing and future charging, energy storage, and the grid-upgrade path.",
+    fields: [
+      { id: "evServiceExisting", label: "Existing EV charging on site", type: "select", options: ["None", "A few Level 2", "Networked Level 2", "DC fast charging present"] },
+      { id: "electricalSpareCapacity", label: "Spare electrical / panel capacity", type: "select", options: ["Ample", "Some", "Little", "Unknown"], help: "Headroom on the existing service before an upgrade is required." },
+      { id: "utilityServiceAmps", label: "Main service size / available amperage", type: "number", unit: "A", placeholder: "e.g. 800" },
+      { id: "dcFastFeasible", label: "DC fast-charging feasibility (property-wide)", type: "select", options: ["Existing", "Feasible with upgrades", "Difficult", "Unknown"] },
+      { id: "chargeStallsToday", label: "Chargeable stalls today", type: "number", placeholder: "e.g. 4" },
+      { id: "chargeNetworkTarget", label: "Desired stall count (network site sizing)", type: "number", placeholder: "e.g. 20" },
+      { id: "energyStorage", label: "On-site energy storage / generation", type: "select", options: ["Battery + solar", "Solar only", "Planned", "None"] },
+      { id: "gridUpgradePath", label: "Utility grid-upgrade path", type: "select", options: ["Clear", "Constrained", "Unknown"] },
+      { id: "chargingSiting", label: "Where charging / storage can sit", type: "multiselect", options: ["Surface lot", "Garage", "Perimeter", "Canopy", "Dedicated pad", "None"] },
+      { id: "energyMgmtSystem", label: "Charging / energy management system present", type: "boolean" },
+    ],
+  },
+  {
+    id: "robotics",
+    title: "Physical AI & Robotics Readiness",
+    description:
+      "Qualifies the property for physical robotics: repetitive workflows, operating environment, internal access and routes, staffing patterns, and the physical conditions required for a successful deployment.",
+    fields: [
+      { id: "repetitiveWorkflows", label: "Repetitive / automatable tasks", type: "multiselect", options: ["Cleaning", "Internal delivery", "Security patrol", "Inventory", "Concierge", "Trash & linen", "None"] },
+      { id: "workflowVolume", label: "How repetitive / high-volume are they", type: "select", options: ["Very", "Moderate", "Low"] },
+      { id: "operatingEnvironment", label: "Operating conditions robots would face", type: "multiselect", options: ["Climate-controlled", "Outdoor exposure", "Wet areas", "Dusty", "Tight spaces"] },
+      { id: "obstacleDensity", label: "Clutter / dynamic obstacle density", type: "select", options: ["Low", "Moderate", "High"] },
+      { id: "robotRouteContinuity", label: "Step-free continuous internal routes", type: "select", options: ["Fully continuous", "Mostly", "Fragmented"], help: "Builds on the access & interior survey (thresholds, corridor width, elevators)." },
+      { id: "staffingPattern", label: "Shift coverage for human-robot handoff", type: "select", options: ["24/7 staffed", "Day only", "Minimal", "Unstaffed"] },
+      { id: "humanTrafficPeaks", label: "Peak times / areas robots must yield", type: "textarea", placeholder: "e.g. lobby 8-10am checkout rush, corridors during housekeeping..." },
+      { id: "robotDockingSpace", label: "Room for robot charging / storage / docking", type: "select", options: ["Dedicated", "Shareable", "None"] },
+      { id: "elevatorAutomation", label: "Elevators callable via API / BMS", type: "boolean" },
+    ],
+  },
+  {
+    id: "delivery",
+    title: "Autonomous Delivery Readiness",
+    description:
+      "Qualifies the property for autonomous delivery (sidewalk robots and AV vans): access, routes, the pedestrian environment, handoff, loading areas, building access, security, and operational workflows.",
+    fields: [
+      { id: "deviceAccess", label: "Sidewalk-robot / AV-van access to the site", type: "select", options: ["Direct & easy", "Some barriers", "Difficult"] },
+      { id: "sidewalkRoutes", label: "Sidewalk / route continuity + curb cuts to the door", type: "select", options: ["Continuous with curb cuts", "Partial", "None"] },
+      { id: "pedestrianEnvironment", label: "Pedestrian environment on delivery paths", type: "select", options: ["Calm", "Moderate", "Congested"] },
+      { id: "deliveryHandoff", label: "Where the delivery handoff happens", type: "select", options: ["Dedicated bay / locker", "Lobby desk", "Curb only", "Undefined"] },
+      { id: "loadingAreas", label: "Loading dock / zone", type: "select", options: ["Dedicated dock", "Shared", "Street only", "None"] },
+      { id: "buildingAccessDelivery", label: "Entry available for delivery", type: "multiselect", options: ["Automatic doors", "Badge / secured", "Staffed lobby", "Direct unit access"] },
+      { id: "securityPosture", label: "Security in place", type: "multiselect", options: ["Cameras", "Access control", "Package room", "Guard", "None"] },
+      { id: "deliveryWorkflows", label: "Current receiving / mailroom / room-delivery workflow", type: "textarea", placeholder: "How parcels and room deliveries are received and distributed today..." },
+      { id: "parcelStorage", label: "Parcel / charging storage for delivery devices", type: "select", options: ["Lockers", "Mailroom", "None"] },
+    ],
+  },
+  {
     id: "goals",
     title: "Automation Goals",
     description: "What the operator wants robots and autonomous systems to do here.",

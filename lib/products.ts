@@ -39,8 +39,9 @@ export type ReportFeature =
   | "narrative" // AI narrative sections + site concept
   | "infrastructure" // proposed infrastructure & cost table
   | "plans" // floor & site plan schematics
+  | "premium-domains" // multi-domain (EV/robotics/delivery/AI-ops) graded roll-up
 
-export type AssessmentTierId = "basic" | "standard" | "pro"
+export type AssessmentTierId = "basic" | "standard" | "pro" | "premium"
 
 export interface AssessmentTier {
   id: AssessmentTierId
@@ -61,6 +62,7 @@ export interface AssessmentTier {
 const BASIC_FEATURES: ReportFeature[] = ["score", "categories", "recommendations"]
 const STANDARD_FEATURES: ReportFeature[] = [...BASIC_FEATURES, "narrative", "infrastructure"]
 const PRO_FEATURES: ReportFeature[] = [...STANDARD_FEATURES, "plans"]
+const PREMIUM_FEATURES: ReportFeature[] = [...PRO_FEATURES, "premium-domains"]
 
 export const ASSESSMENT_TIERS: AssessmentTier[] = [
   {
@@ -93,6 +95,22 @@ export const ASSESSMENT_TIERS: AssessmentTier[] = [
     rank: 3,
     includes: PRO_FEATURES,
     highlights: ["Everything in Standard", "Floor & site plan schematics", "Contractor-ready documentation"],
+  },
+  {
+    id: "premium",
+    name: "Premium Assessment",
+    tagline: "The whole autonomous transition",
+    description:
+      "Everything in Quality Pro plus the multi-domain readiness roll-up — arrival, EV & charging, physical robotics, autonomous delivery, and AI-enabled operations, each graded across every key point.",
+    priceInCents: 1500000, // $15,000 — placeholder, edit in lib/products.ts
+    rank: 4,
+    featured: true,
+    includes: PREMIUM_FEATURES,
+    highlights: [
+      "Everything in Quality Pro",
+      "5-domain, 100-point readiness roll-up",
+      "Every key point graded A–F with evidence",
+    ],
   },
 ]
 
