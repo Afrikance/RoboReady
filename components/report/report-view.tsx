@@ -1,11 +1,12 @@
 import { ScoreGauge, scoreBand } from "@/components/score/score-gauge"
 import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
 import { PlanSchematic } from "@/components/plans/plan-schematic"
+import { PremiumBreakdown, type PremiumBreakdown as PremiumBreakdownData } from "@/components/assessment/premium-breakdown"
 import { CyberFleetCta } from "@/components/cyber-fleet/cyber-fleet-cta"
 import type { ReferralCtaData } from "@/lib/cyber-fleet"
 import { Lock } from "lucide-react"
 import {
-  getAssessmentTier,
+  ASSESSMENT_TIERS,
   nextTier,
   type AssessmentTierId,
   type ReportFeature,
@@ -43,6 +44,8 @@ export type ReportContext = {
   }>
   findings: Array<{ title: string; severity: string; detail: string }>
   recommendations: Array<{ title: string; priority: string; detail: string; estimatedImpact: string }>
+  /** Premium-tier multi-domain roll-up, null for lower tiers. */
+  premium: PremiumBreakdownData | null
   conceptTitle: string | null
   conceptNarrative: string | null
   plan: {
@@ -70,11 +73,10 @@ export type ReportContext = {
 /** A tasteful placeholder shown where a section would be, gated behind a higher tier. */
 function LockedSection({ title, feature }: { title: string; feature: ReportFeature }) {
   const upsell = nextTier(null)
-  // Find the lowest tier that actually includes this feature, for accurate copy.
-  const unlockTier =
-    getAssessmentTier("standard")?.includes.includes(feature)
-      ? getAssessmentTier("standard")
-      : getAssessmentTier("pro")
+  // Find the lowest tier (by rank) that actually includes this feature, for accurate copy.
+  const unlockTier = [...ASSESSMENT_TIERS]
+    .sort((a, b) => a.rank - b.rank)
+    .find((t) => t.includes.includes(feature))
   const label = unlockTier?.name ?? upsell?.name ?? "a higher tier"
   return (
     <section className="rounded-lg border border-dashed border-border bg-muted/30 p-5 print:hidden">
@@ -151,6 +153,18 @@ export function ReportView({ ctx, enforce = false }: { ctx: ReportContext; enfor
             })}
           </div>
         </section>
+      ) : null}
+
+      {/* Premium multi-domain readiness roll-up (Premium tier) */}
+      {ctx.premium && ctx.premium.domains?.length ? (
+        has("premium-domains") ? (
+          <section className="space-y-4">
+            <h2 className="text-lg font-semibold">Multi-domain readiness</h2>
+            <PremiumBreakdown data={ctx.premium} />
+          </section>
+        ) : (
+          <LockedSection title="Multi-domain readiness roll-up" feature="premium-domains" />
+        )
       ) : null}
 
       {/* AI narrative + site concept (Standard tier and up) */}

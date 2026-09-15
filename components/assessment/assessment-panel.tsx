@@ -5,6 +5,7 @@ import { CheckoutDialog } from "@/components/checkout/checkout-dialog"
 import { startAssessmentCheckout } from "@/app/actions/payments"
 import { ASSESSMENT_TIERS, tierRank, type AssessmentTier, type AssessmentTierId } from "@/lib/products"
 import { scoreCategoryLabel, scoreCategoryMax } from "@/lib/ai/schemas"
+import { PremiumBreakdown, type PremiumBreakdown as PremiumBreakdownData } from "@/components/assessment/premium-breakdown"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { AlertTriangle, Lightbulb, Sparkles } from "lucide-react"
@@ -20,7 +21,8 @@ function priceLabel(cents: number) {
  */
 function recommendedUpsell(purchasedTier: AssessmentTierId | null): AssessmentTier | null {
   const rank = tierRank(purchasedTier)
-  if (rank >= 3) return null
+  const topRank = Math.max(...ASSESSMENT_TIERS.map((t) => t.rank))
+  if (rank >= topRank) return null
   if (rank === 0) return ASSESSMENT_TIERS.find((t) => t.id === "standard") ?? null
   return ASSESSMENT_TIERS.find((t) => t.rank === rank + 1) ?? null
 }
@@ -57,6 +59,7 @@ function categoryPct(b: CategoryScore): number {
 type Assessment = {
   roboReadyScore: number | null
   scoreBreakdown: unknown
+  premiumBreakdown?: unknown
   findings: unknown
   recommendations: unknown
   summary: string | null
@@ -121,6 +124,7 @@ export function AssessmentPanel({
   }
 
   const breakdown = (assessment.scoreBreakdown as CategoryScore[]) ?? []
+  const premium = (assessment.premiumBreakdown as PremiumBreakdownData | null) ?? null
   const findings = (assessment.findings as Array<{ title: string; severity: string; detail: string }>) ?? []
   const recommendations =
     (assessment.recommendations as Array<{ title: string; priority: string; detail: string; estimatedImpact: string }>) ??
@@ -234,6 +238,16 @@ export function AssessmentPanel({
               )
             })}
           </div>
+        </section>
+      ) : null}
+
+      {premium && premium.domains?.length ? (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Premium multi-domain readiness</h3>
+            <span className="text-xs text-muted-foreground">Arrival · EV · Robotics · Delivery · AI-Ops</span>
+          </div>
+          <PremiumBreakdown data={premium} />
         </section>
       ) : null}
 

@@ -98,6 +98,7 @@ export async function buildReportContext(propertyId: string): Promise<ReportCont
     score: assess?.roboReadyScore ?? null,
     scoreSummary: assess?.summary ?? null,
     breakdown: (assess?.scoreBreakdown as ReportContext["breakdown"]) ?? [],
+    premium: (assess?.premiumBreakdown as ReportContext["premium"]) ?? null,
     findings: (assess?.findings as ReportContext["findings"]) ?? [],
     recommendations: (assess?.recommendations as ReportContext["recommendations"]) ?? [],
     conceptTitle: concept?.title ?? null,

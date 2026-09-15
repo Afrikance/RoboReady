@@ -6,6 +6,7 @@ import type { StaffGPTAdapter, DispatchRequest, DispatchResult } from "@/lib/ai/
 import { getEmployee } from "@/lib/ai/employees"
 import {
   assessmentSchema,
+  premiumAssessmentSchema,
   siteConceptSchema,
   sitePlanDesignSchema,
   infrastructurePlanSchema,
@@ -27,6 +28,16 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
     schema: assessmentSchema,
     instructions:
       "You are the Property Assessment Specialist. Produce the standardized RoboReady Autonomous-Arrival Readiness Assessment. RoboReady's PRIMARY use case is robotaxi / CyberCab arrival (autonomous ride-hail such as Waymo, Tesla Cybercab, Zoox) — passenger pick-up and drop-off at the property. Score EXACTLY these 8 categories, each awarded points out of its cap: Curb Readiness (curb, /20), Wayfinding (/15), Accessibility (/15), Passenger Experience (passenger, /15), Signage (/10), Infrastructure (/10), Traffic / Pedestrian Flow (traffic, /10), Future Expansion (future, /5). The overall roboReadyScore must equal the sum of the awarded points (0-100). For EVERY category you MUST provide: points, an explanation, an evidence array citing the specific property/intake facts used, a confidence level, and concrete recommendations. NEVER fabricate a missing fact — if something is unknown, say so in the evidence and lower both the points and the confidence. Be specific and honest: a property with no viable curbside pick-up/drop-off should score low on Curb Readiness and Passenger Experience.",
+  },
+  "premium-assessment": {
+    schema: premiumAssessmentSchema,
+    instructions:
+      "You are the Property Assessment Specialist producing the PREMIUM multi-domain readiness roll-up. The canonical robotaxi-arrival score is handled separately (Domain 1) — do NOT re-score it. Score EVERY key point in the other four domains, each awarded points out of its cap: " +
+      "EV & Charging Network (25) — ev-electrical (electrical service & spare capacity, /6), ev-stalls (existing charging stalls, /4), ev-dcfast (DC fast-charging feasibility, /5), ev-network (charging network site suitability, /4), ev-storage (energy storage/solar/resilience, /3), ev-grid (grid-upgrade & expansion path, /3); " +
+      "Physical AI & Robotics (20) — rob-workflows (repetitive/automatable workflows, /4), rob-environment (operating environment, /4), rob-routes (internal access & route continuity, /4), rob-staffing (staffing patterns & human-robot handoff, /3), rob-docking (robot charging/storage/docking, /3), rob-connectivity (connectivity & positioning, /2); " +
+      "Autonomous Delivery (20) — del-access (site access for device/van, /3), del-routes (sidewalks/routes/pedestrian environment, /4), del-handoff (delivery handoff, /3), del-loading (loading areas, /3), del-building (building access, /3), del-security (security, /2), del-ops (operational workflows & storage, /2); " +
+      "AI-Enabled Operations (5) — ops-bms (BMS/building-automation integration, /2), ops-telemetry (data/telemetry & operational readiness, /2), ops-governance (governance/staffing for AI ops, /1). " +
+      "For EVERY key point provide points, an explanation, an evidence array citing the exact intake/property facts used, a confidence level, and concrete recommendations. NEVER fabricate a missing fact — if something is unknown, say so in the evidence and lower both points and confidence. Grounded strictly in the property's intake and profile; this is an AI readiness estimate, never an engineering approval.",
   },
   "site-concept": {
     schema: siteConceptSchema,

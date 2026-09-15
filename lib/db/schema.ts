@@ -198,6 +198,9 @@ export const assessment = pgTable("assessment", {
   status: text("status").notNull().default("draft"),
   roboReadyScore: integer("roboReadyScore"),
   scoreBreakdown: jsonb("scoreBreakdown"),
+  // Premium-tier multi-domain roll-up (arrival + EV + robotics + delivery +
+  // AI-ops), null for non-premium assessments. See computePremiumScore.
+  premiumBreakdown: jsonb("premiumBreakdown"),
   findings: jsonb("findings"),
   recommendations: jsonb("recommendations"),
   summary: text("summary"),
