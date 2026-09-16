@@ -72,9 +72,9 @@ function DomainBar({ pct, band }: { pct: number; band: "high" | "mid" | "low" | 
 
 /**
  * The Premium multi-domain graded breakdown: an overall 100-pt roll-up gauge,
- * then each of the five domains with its subtotal + grade, and — for the four
- * scored domains — every key point graded A–F with its evidence. Presentational
- * and print-friendly; used in both the staff panel and the client report.
+ * then each domain with its subtotal + grade, and — for the AI-scored domains —
+ * every key point graded A–F with its evidence. Presentational and
+ * print-friendly; used in both the staff panel and the client report.
  */
 export function PremiumBreakdown({ data }: { data: PremiumBreakdown }) {
   const summaryByDomain = new Map((data.domainSummaries ?? []).map((d) => [d.domain, d.summary]))
@@ -92,7 +92,7 @@ export function PremiumBreakdown({ data }: { data: PremiumBreakdown }) {
         <div className="flex-1 space-y-1.5 text-center sm:text-left">
           <h3 className="text-lg font-semibold">Premium RoboReady Score</h3>
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            5 domains · 100 points · graded A–F
+            {data.domains.length} domains · 100 points · graded A–F
           </p>
           {data.summary ? <p className="text-sm text-muted-foreground text-pretty">{data.summary}</p> : null}
         </div>
