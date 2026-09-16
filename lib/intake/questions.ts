@@ -146,11 +146,31 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
     ],
   },
   {
+    id: "airtaxi",
+    title: "Air Taxi / eVTOL Readiness",
+    description:
+      "Qualifies the property as an air-taxi landing site (eVTOL / TxDOT-style vertiport): a clear landing pad, obstruction-free approach airspace, siting away from traffic and crowds, and a high-elevation guide beacon for the approach.",
+    fields: [
+      { id: "landingPadAvailable", label: "Potential landing pad / touchdown area", type: "select", options: ["Dedicated pad feasible", "Open ground area", "Rooftop candidate", "None identified"], help: "A clear, level touchdown-and-liftoff area is the core requirement." },
+      { id: "landingSurface", label: "Where the pad could sit", type: "multiselect", options: ["Rooftop", "Ground-level open area", "Parking structure top deck", "Adjacent lot", "None"], help: "Rooftops are often ideal — elevated and away from ground traffic." },
+      { id: "padDimensionsM", label: "Largest clear pad dimension", type: "number", unit: "m", placeholder: "e.g. 15" },
+      { id: "powerLineClearance", label: "Clear of power lines", type: "select", options: ["Fully clear", "Some nearby lines", "Lines directly overhead", "Unknown"], help: "The approach and pad must be free of overhead power lines." },
+      { id: "treeClearance", label: "Clear of tall trees / vertical obstructions", type: "select", options: ["Fully clear", "Some obstructions", "Heavily obstructed", "Unknown"] },
+      { id: "approachObstructions", label: "Approach / departure path obstructions", type: "textarea", placeholder: "Adjacent towers, masts, cranes, tall buildings, antennas along the flight path..." },
+      { id: "trafficProximity", label: "Distance from road / vehicle traffic", type: "select", options: ["Well separated", "Moderate separation", "Adjacent to traffic"], help: "Landing sites should be away from active traffic." },
+      { id: "crowdProximity", label: "Distance from busy / crowded areas", type: "select", options: ["Away from crowds", "Moderate footfall nearby", "In a busy area"] },
+      { id: "beaconMountFeasible", label: "High-elevation guide-beacon mounting", type: "select", options: ["High point available", "Possible with structure", "Difficult", "Unknown"], help: "A guide beacon must be mountable at high elevation to mark the approach." },
+      { id: "beaconMountPoint", label: "Candidate beacon mounting point", type: "text", placeholder: "e.g. rooftop parapet, existing mast, elevator penthouse" },
+      { id: "airspaceRestrictions", label: "Known airspace / regulatory restrictions", type: "select", options: ["None known", "Near controlled airspace", "Restricted zone", "Unknown"] },
+      { id: "padGroundAccess", label: "Ground access from pad to building entrance", type: "select", options: ["Direct & step-free", "Requires elevator", "Long / indirect", "None"] },
+    ],
+  },
+  {
     id: "goals",
     title: "Automation Goals",
     description: "What the operator wants robots and autonomous systems to do here.",
     fields: [
-      { id: "useCases", label: "Target use cases", type: "multiselect", options: ["Robotaxi / CyberCab (AV pick-up & drop-off)", "Delivery robots", "Cleaning robots", "Security patrol", "Drone operations", "EV / robot charging", "Concierge / info kiosks", "Inventory"], help: "Robotaxi / CyberCab is RoboReady's primary use case." },
+      { id: "useCases", label: "Target use cases", type: "multiselect", options: ["Robotaxi / CyberCab (AV pick-up & drop-off)", "Air taxi / eVTOL (vertiport)", "Delivery robots", "Cleaning robots", "Security patrol", "Drone operations", "EV / robot charging", "Concierge / info kiosks", "Inventory"], help: "Robotaxi / CyberCab is RoboReady's primary use case." },
       { id: "timeline", label: "Deployment timeline", type: "select", options: ["Exploring", "Within 6 months", "6-12 months", "12+ months"] },
       { id: "budgetBand", label: "Budget band", type: "select", options: ["Not sure yet", "Under $25k", "$25k-$100k", "$100k-$500k", "$500k+"] },
       { id: "notes", label: "Anything else we should know?", type: "textarea", placeholder: "Constraints, priorities, existing systems..." },

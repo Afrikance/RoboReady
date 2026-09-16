@@ -174,7 +174,7 @@ export default async function LandingPage() {
     className="text-primary hover:underline"
   >
     StaffGPT
-  </a>{" "}
+  </a>{" "}clear
   AI Workforce Technology.
 </p>
 
