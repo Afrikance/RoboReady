@@ -126,50 +126,59 @@ export function computeRoboReadyScore(
 }
 
 // ---------------------------------------------------------------------------
-// Premium Assessment — multi-domain readiness roll-up (100 points, 5 domains)
+// Premium Assessment — multi-domain readiness roll-up (100 points, 6 domains)
 // ---------------------------------------------------------------------------
 // Premium is the top tier. It PRESERVES the canonical 8-category robotaxi score
-// above and nests it as Domain 1 ("Autonomous Arrival"), rescaled to a 30-pt
-// weight. Domains 2-5 (EV, Robotics, Delivery, AI-Ops) are scored by the AI as
-// individual graded key points. The platform owns the arithmetic exactly like
-// computeRoboReadyScore: the model proposes per-key-point points, the platform
-// clamps each to its cap and sums into domain subtotals and the overall.
+// above and nests it as Domain 1 ("Autonomous Arrival"), rescaled to a 25-pt
+// weight. Domains 2-6 (EV, Robotics, Delivery, Air Taxi, AI-Ops) are scored by
+// the AI as individual graded key points. The platform owns the arithmetic
+// exactly like computeRoboReadyScore: the model proposes per-key-point points,
+// the platform clamps each to its cap and sums into domain subtotals and the
+// overall. Each domain's key-point caps sum to that domain's max.
 
 export const PREMIUM_DOMAIN_DEFS = [
-  { id: "arrival", label: "Autonomous Arrival (Robotaxi / CyberCab)", max: 30, derived: true },
-  { id: "ev", label: "EV & Charging Network Infrastructure", max: 25, derived: false },
-  { id: "robotics", label: "Physical AI & Robotics Readiness", max: 20, derived: false },
-  { id: "delivery", label: "Autonomous Delivery Readiness", max: 20, derived: false },
+  { id: "arrival", label: "Autonomous Arrival (Robotaxi / CyberCab)", max: 25, derived: true },
+  { id: "ev", label: "EV & Charging Network Infrastructure", max: 20, derived: false },
+  { id: "robotics", label: "Physical AI & Robotics Readiness", max: 15, derived: false },
+  { id: "delivery", label: "Autonomous Delivery Readiness", max: 15, derived: false },
+  { id: "airtaxi", label: "Air Taxi / eVTOL Readiness", max: 20, derived: false },
   { id: "aiops", label: "AI-Enabled Operations & Building Automation", max: 5, derived: false },
 ] as const
 export type PremiumDomainId = (typeof PREMIUM_DOMAIN_DEFS)[number]["id"]
 
-// Every graded key point in domains 2-5, with its point cap. Domain 1's detail
+// Every graded key point in domains 2-6, with its point cap. Domain 1's detail
 // is the existing 8-category robotaxi breakdown, so it isn't re-listed here.
 export const PREMIUM_KEYPOINT_DEFS = [
-  // Domain 2 — EV & Charging Network (25)
-  { id: "ev-electrical", domain: "ev", label: "Electrical service & spare capacity", max: 6 },
-  { id: "ev-stalls", domain: "ev", label: "Existing charging stalls", max: 4 },
-  { id: "ev-dcfast", domain: "ev", label: "DC fast-charging feasibility", max: 5 },
-  { id: "ev-network", domain: "ev", label: "Charging network site suitability", max: 4 },
+  // Domain 2 — EV & Charging Network (20)
+  { id: "ev-electrical", domain: "ev", label: "Electrical service & spare capacity", max: 5 },
+  { id: "ev-stalls", domain: "ev", label: "Existing charging stalls", max: 3 },
+  { id: "ev-dcfast", domain: "ev", label: "DC fast-charging feasibility", max: 4 },
+  { id: "ev-network", domain: "ev", label: "Charging network site suitability", max: 3 },
   { id: "ev-storage", domain: "ev", label: "Energy storage / solar / resilience", max: 3 },
-  { id: "ev-grid", domain: "ev", label: "Grid-upgrade & expansion path", max: 3 },
-  // Domain 3 — Physical AI & Robotics (20)
-  { id: "rob-workflows", domain: "robotics", label: "Repetitive / automatable workflows", max: 4 },
-  { id: "rob-environment", domain: "robotics", label: "Operating environment", max: 4 },
-  { id: "rob-routes", domain: "robotics", label: "Internal access & route continuity", max: 4 },
-  { id: "rob-staffing", domain: "robotics", label: "Staffing patterns & human-robot handoff", max: 3 },
-  { id: "rob-docking", domain: "robotics", label: "Robot charging / storage / docking", max: 3 },
+  { id: "ev-grid", domain: "ev", label: "Grid-upgrade & expansion path", max: 2 },
+  // Domain 3 — Physical AI & Robotics (15)
+  { id: "rob-workflows", domain: "robotics", label: "Repetitive / automatable workflows", max: 3 },
+  { id: "rob-environment", domain: "robotics", label: "Operating environment", max: 3 },
+  { id: "rob-routes", domain: "robotics", label: "Internal access & route continuity", max: 3 },
+  { id: "rob-staffing", domain: "robotics", label: "Staffing patterns & human-robot handoff", max: 2 },
+  { id: "rob-docking", domain: "robotics", label: "Robot charging / storage / docking", max: 2 },
   { id: "rob-connectivity", domain: "robotics", label: "Connectivity & positioning for robots", max: 2 },
-  // Domain 4 — Autonomous Delivery (20)
-  { id: "del-access", domain: "delivery", label: "Site access (device / van)", max: 3 },
-  { id: "del-routes", domain: "delivery", label: "Sidewalks / routes / pedestrian environment", max: 4 },
-  { id: "del-handoff", domain: "delivery", label: "Delivery handoff", max: 3 },
-  { id: "del-loading", domain: "delivery", label: "Loading areas", max: 3 },
-  { id: "del-building", domain: "delivery", label: "Building access", max: 3 },
+  // Domain 4 — Autonomous Delivery (15)
+  { id: "del-access", domain: "delivery", label: "Site access (device / van)", max: 2 },
+  { id: "del-routes", domain: "delivery", label: "Sidewalks / routes / pedestrian environment", max: 3 },
+  { id: "del-handoff", domain: "delivery", label: "Delivery handoff", max: 2 },
+  { id: "del-loading", domain: "delivery", label: "Loading areas", max: 2 },
+  { id: "del-building", domain: "delivery", label: "Building access", max: 2 },
   { id: "del-security", domain: "delivery", label: "Security", max: 2 },
   { id: "del-ops", domain: "delivery", label: "Operational workflows & storage", max: 2 },
-  // Domain 5 — AI-Enabled Operations & Building Automation (5)
+  // Domain 5 — Air Taxi / eVTOL (20)
+  { id: "air-pad", domain: "airtaxi", label: "Landing pad / touchdown area (incl. rooftop)", max: 5 },
+  { id: "air-clearance", domain: "airtaxi", label: "Power-line & tall-tree clearance", max: 4 },
+  { id: "air-approach", domain: "airtaxi", label: "Approach / departure path obstructions", max: 3 },
+  { id: "air-siting", domain: "airtaxi", label: "Separation from traffic & crowds", max: 3 },
+  { id: "air-beacon", domain: "airtaxi", label: "High-elevation guide-beacon mounting", max: 3 },
+  { id: "air-access", domain: "airtaxi", label: "Airspace & pad-to-building access", max: 2 },
+  // Domain 6 — AI-Enabled Operations & Building Automation (5)
   { id: "ops-bms", domain: "aiops", label: "BMS / building-automation integration", max: 2 },
   { id: "ops-telemetry", domain: "aiops", label: "Data / telemetry & operational readiness", max: 2 },
   { id: "ops-governance", domain: "aiops", label: "Governance / staffing for AI ops", max: 1 },
@@ -229,16 +238,16 @@ export const premiumAssessmentSchema = z.object({
         recommendations: z.array(z.string()).describe("Concrete improvements that would raise this key point."),
       }),
     )
-    .describe("One entry per scored key point across the EV, Robotics, Delivery and AI-Ops domains."),
+    .describe("One entry per scored key point across the EV, Robotics, Delivery, Air Taxi and AI-Ops domains."),
   domainSummaries: z
     .array(
       z.object({
-        domain: z.enum(["ev", "robotics", "delivery", "aiops"]),
+        domain: z.enum(["ev", "robotics", "delivery", "airtaxi", "aiops"]),
         summary: z.string().describe("2-3 sentence readiness summary for this domain."),
       }),
     )
     .describe("One summary per non-arrival domain."),
-  summary: z.string().describe("2-3 sentence executive summary across all five premium domains."),
+  summary: z.string().describe("2-3 sentence executive summary across all six premium domains."),
 })
 export type PremiumAssessmentOutput = z.infer<typeof premiumAssessmentSchema>
 
