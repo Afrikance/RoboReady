@@ -21,6 +21,33 @@ export const PARTNER = {
   ],
 } as const
 
+// Tesla business-charging referrals surfaced alongside the Cyber Fleet offer.
+// These are simple outbound referrals to Tesla's commercial charging programs —
+// they are NOT part of the internal referral pipeline (no status tracking).
+export type TeslaReferral = {
+  id: string
+  name: string
+  blurb: string
+  url: string
+}
+
+export const TESLA_REFERRALS: readonly TeslaReferral[] = [
+  {
+    id: "supercharger-business",
+    name: "Tesla Supercharger for Business",
+    blurb:
+      "Own white-labeled DC fast-charging on site, with Tesla handling network operations, maintenance, and driver support. Ideal for fleet turnaround and public charging revenue.",
+    url: "https://www.tesla.com/support/supercharging-your-business",
+  },
+  {
+    id: "wall-connector-business",
+    name: "Tesla Wall Connector for Business",
+    blurb:
+      "Level 2 charging for workplaces and properties, installed by a Tesla Certified Installer. Set your own pricing or offer free charging to guests and employees.",
+    url: "https://www.tesla.com/support/charging-your-business",
+  },
+] as const
+
 // Default qualifying RoboReady Score band. Admin-editable per workspace via the
 // partner_setting table; these are the fallbacks when no row exists yet.
 export const DEFAULT_QUALIFY_MIN = 50
