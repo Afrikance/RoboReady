@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { Bot, Check, CheckCircle2, Clock } from "lucide-react"
+import { Bot, Check, CheckCircle2, Clock, ExternalLink, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { PARTNER, type ReferralCtaData } from "@/lib/cyber-fleet"
+import { PARTNER, TESLA_REFERRALS, type ReferralCtaData } from "@/lib/cyber-fleet"
 import { RequestEvaluationButton } from "@/components/cyber-fleet/request-evaluation-button"
 
 /**
@@ -70,28 +70,70 @@ export function CyberFleetCta({
         </Button>
         <span className="text-xs text-muted-foreground">No obligation — starts with a free 90-day pilot review.</span>
       </div>
+
+      <TeslaReferrals />
     </section>
+  )
+}
+
+/**
+ * Tesla commercial-charging referrals shown alongside the Cyber Fleet offer.
+ * Outbound links to Tesla's business programs — no internal pipeline tracking.
+ */
+function TeslaReferrals() {
+  return (
+    <div className="mt-6 border-t border-primary/20 pt-5">
+      <p className="text-xs font-semibold uppercase tracking-widest text-primary">Charging partners</p>
+      <p className="mt-0.5 text-sm text-muted-foreground text-pretty">
+        Power the fleet with Tesla&apos;s commercial charging programs.
+      </p>
+      <ul className="mt-3 grid gap-3 sm:grid-cols-2">
+        {TESLA_REFERRALS.map((t) => (
+          <li key={t.id}>
+            <a
+              href={t.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group flex h-full flex-col rounded-lg border border-border bg-background p-4 transition-colors hover:border-primary/50"
+            >
+              <span className="flex items-center gap-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <Zap className="size-4" />
+                </span>
+                <span className="text-sm font-semibold text-pretty">{t.name}</span>
+                <ExternalLink className="ml-auto size-3.5 shrink-0 text-muted-foreground transition-colors group-hover:text-primary" />
+              </span>
+              <span className="mt-2 text-xs text-muted-foreground text-pretty">{t.blurb}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
 function RequestedState({ className }: { className?: string }) {
   return (
     <section
-      className={`flex items-start gap-3 rounded-xl border border-[var(--score-high)]/40 bg-[var(--score-high)]/5 p-6 print:hidden ${className ?? ""}`}
+      className={`rounded-xl border border-[var(--score-high)]/40 bg-[var(--score-high)]/5 p-6 print:hidden ${className ?? ""}`}
     >
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--score-high)]/15 text-[var(--score-high)]">
-        <CheckCircle2 className="size-5" />
-      </span>
-      <div>
-        <h2 className="text-lg font-semibold text-balance">{PARTNER.name} evaluation requested</h2>
-        <p className="mt-1 text-sm text-muted-foreground text-pretty">
-          Thanks — your request is in. The {PARTNER.name} team will reach out to schedule your evaluation and 90-day
-          pilot.
-        </p>
-        <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
-          <Clock className="size-3.5" /> We&apos;ll keep you posted here and by email.
-        </p>
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-[var(--score-high)]/15 text-[var(--score-high)]">
+          <CheckCircle2 className="size-5" />
+        </span>
+        <div>
+          <h2 className="text-lg font-semibold text-balance">{PARTNER.name} evaluation requested</h2>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Thanks — your request is in. The {PARTNER.name} team will reach out to schedule your evaluation and 90-day
+            pilot.
+          </p>
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Clock className="size-3.5" /> We&apos;ll keep you posted here and by email.
+          </p>
+        </div>
       </div>
+
+      <TeslaReferrals />
     </section>
   )
 }

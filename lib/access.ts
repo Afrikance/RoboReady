@@ -40,6 +40,7 @@ const CLIENT_NAV_HREFS = new Set([
   "/dashboard",
   "/dashboard/properties",
   "/dashboard/reports",
+  "/dashboard/network",
   "/dashboard/cyber-fleet",
   "/dashboard/settings",
 ])
