@@ -45,10 +45,11 @@ export function ServicePlanPanel({
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border py-16 text-center">
         <ShieldCheck className="mb-3 h-8 w-8 text-muted-foreground" />
-        <p className="text-sm font-medium">Care plans unlock after verification</p>
+        <p className="text-sm font-medium">RoboArrival Care Plan unlocks after verification</p>
         <p className="mt-1 max-w-md text-sm text-muted-foreground text-pretty">
-          Concierge &amp; Maintenance plans keep deployed autonomous infrastructure running. They become available once
-          this property is verified and moving through assessment.
+          The RoboArrival Care Plan (Concierge &amp; Maintenance) keeps deployed autonomous infrastructure running and
+          unlocks the properties network. It becomes available once this property is verified and moving through
+          assessment.
         </p>
       </div>
     )
@@ -61,7 +62,7 @@ export function ServicePlanPanel({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-balance">
-            {active ? "Change plan" : "Concierge & Maintenance plans"}
+            {active ? "Change plan" : "RoboArrival Care Plan"}
           </h3>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground text-pretty">
             Ongoing service for this property, billed as a recurring subscription. Cancel anytime — coverage runs to the

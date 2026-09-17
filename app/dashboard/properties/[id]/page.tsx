@@ -32,6 +32,8 @@ import { getAssessmentRunState } from "@/app/actions/assessment-run"
 import { getPurchasedTier } from "@/app/actions/payments"
 import { ClientAssessment } from "@/components/assessment/client-assessment"
 import { getCyberFleetCtaData } from "@/app/actions/cyber-fleet"
+import { getNetworkAdminState } from "@/app/actions/network"
+import { NetworkListingPanel } from "@/components/network/network-listing-panel"
 import { OfferAssessment } from "@/components/assessment/offer-assessment"
 import { isFieldRole } from "@/lib/tenancy"
 import { listAssignableStaff, listAssignmentsForProperty } from "@/app/actions/assignments"
@@ -131,6 +133,9 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     ? await Promise.all([listAssignmentsForProperty(id), listAssignableStaff()])
     : [[], []]
 
+  // The RoboArrival network listing controls are admin/owner only.
+  const netState = canVerify ? await getNetworkAdminState(id) : null
+
   // Front-of-funnel pipeline metadata: AI-prefilled vs blank fields, and the
   // soft-gate warning shown until an admin verifies the field-collected data.
   const pipeline = (property.metadata as { pipeline?: { prefill?: { filled?: string[]; leftBlank?: string[] } } } | null)
@@ -159,10 +164,14 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
     { id: "accessibility", label: "Accessibility", badge: accessibility?.score != null ? String(accessibility.score) : undefined },
     { id: "ev", label: "EV charging" },
     { id: "proposal", label: "Proposal", badge: proposal ? `v${proposal.version}` : undefined },
-    { id: "care", label: "Care plan", badge: subscription ? "Active" : undefined },
+    { id: "care", label: "RoboArrival Care Plan", badge: subscription ? "Active" : undefined },
+    { id: "network", label: "Network", badge: netState?.listed ? "Listed" : undefined },
     { id: "report", label: "Report" },
   ]
-  const tabs = allTabs.filter((tab) => canUsePropertyTab(role, tab.id))
+  const tabs = allTabs
+    .filter((tab) => canUsePropertyTab(role, tab.id))
+    // The network listing controls are admin/owner only.
+    .filter((tab) => tab.id !== "network" || canVerify)
 
   const allPanels: Record<string, ReactNode> = {
     overview: (
@@ -247,6 +256,7 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
         locked={["prospect", "handover", "pending_verification"].includes(property.status)}
       />
     ),
+    network: netState ? <NetworkListingPanel propertyId={id} state={netState} /> : null,
     report: reportCtx ? <ReportPanel propertyId={id} ctx={reportCtx} /> : null,
   }
   // Only ship panels for tabs the role can see — a hidden tab's content must

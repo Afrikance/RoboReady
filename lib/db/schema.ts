@@ -589,3 +589,69 @@ export const partnerSetting = pgTable(
     onePerOrg: unique().on(t.organizationId),
   }),
 )
+
+// ---------------------------------------------------------------------------
+// Autonomous Ready Properties Network — powered by RoboArrival
+//
+// A standalone, cross-org directory that assessed properties populate. Kept as
+// its own table (not columns on `property`) because the network is public-
+// capable and its visibility/amenity/telemetry lifecycle is independent of the
+// internal assessment workflow. One listing per property.
+// ---------------------------------------------------------------------------
+export const networkListing = pgTable(
+  "network_listing",
+  {
+    id: text("id").primaryKey(),
+    // FK-by-convention to property.id (one listing per property).
+    propertyId: text("propertyId").notNull(),
+    // Provenance — always the shared RoboReady platform org today.
+    organizationId: text("organizationId").notNull(),
+    // none | care_plan | signed_in | public. Admin-controlled. `none` = not
+    // listed; the network never returns it to a browsing audience.
+    visibility: text("visibility").notNull().default("none"),
+    // Resolved amenity id list actually shown (derived ∪ added − removed).
+    amenities: jsonb("amenities").notNull().default([]),
+    // Last auto-derived amenity set, kept for diffing / re-derive.
+    derivedAmenities: jsonb("derivedAmenities").notNull().default([]),
+    // Admin edits layered over the derived set: { added: string[], removed: string[] }.
+    amenityOverrides: jsonb("amenityOverrides").notNull().default({}),
+    // Optional admin-editable marketing copy for the public card.
+    headline: text("headline"),
+    blurb: text("blurb"),
+    // Snapshotted from the property for fast map/list queries without a join.
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    city: text("city"),
+    region: text("region"),
+    country: text("country"),
+    roboReadyScore: integer("roboReadyScore"),
+    // Cached latest AV telemetry: { arriving, departing, idle, source, at, live }.
+    liveStatus: jsonb("liveStatus").notNull().default({}),
+    publishedAt: timestamp("publishedAt"),
+    publishedByUserId: text("publishedByUserId"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    oneListingPerProperty: unique().on(t.propertyId),
+  }),
+)
+
+// Append-only AV arrival/departure/idle log. Written manually today (admin
+// "record AV event") and by the Tesla Fleet/Business/satellite adapter when
+// connected. Reduced into networkListing.liveStatus for display.
+export const networkAvEvent = pgTable("network_av_event", {
+  id: text("id").primaryKey(),
+  listingId: text("listingId").notNull(),
+  propertyId: text("propertyId").notNull(),
+  // arriving | departing | idle | arrived | departed
+  kind: text("kind").notNull(),
+  // Opaque AV identifier (VIN / fleet id from Tesla; freeform label when manual).
+  vehicleRef: text("vehicleRef").notNull(),
+  // manual | tesla_fleet | tesla_business | satellite
+  source: text("source").notNull().default("manual"),
+  detail: jsonb("detail"),
+  occurredAt: timestamp("occurredAt").notNull().defaultNow(),
+  createdByUserId: text("createdByUserId"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})

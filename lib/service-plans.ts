@@ -31,6 +31,7 @@ export const SERVICE_PLANS: ServicePlan[] = [
       "Quarterly automated re-assessment",
       "Score-drop email alerts",
       "Client portal access",
+      "RoboArrival network access — gated listings + live AV tracking",
     ],
   },
   {

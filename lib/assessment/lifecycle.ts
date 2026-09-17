@@ -12,6 +12,7 @@ import {
   siteConcept,
 } from "@/lib/db/schema"
 import { evaluateReferralEligibility } from "@/lib/cyber-fleet-server"
+import { syncListingFromAssessment } from "@/lib/network/data"
 import { runJob } from "@/lib/ai/orchestrator"
 import {
   computeRoboReadyScore,
@@ -319,6 +320,15 @@ async function stepFinalize(run: Run): Promise<void> {
     propertyId: run.propertyId,
     ownerUserId: run.createdByUserId,
   })
+
+  // Keep an existing RoboArrival network listing in sync with the fresh
+  // assessment (re-derive amenities, re-snapshot score + coordinates). No-op
+  // if the property was never published. Best-effort — never blocks finalize.
+  try {
+    await syncListingFromAssessment(run.propertyId)
+  } catch (err) {
+    console.log("[v0] syncListingFromAssessment failed:", (err as Error).message)
+  }
 }
 
 /** Existence-based resume: decides the next action from persisted artifacts. */
