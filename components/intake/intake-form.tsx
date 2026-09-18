@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { INTAKE_SECTIONS, intakeCompletion, type IntakeField } from "@/lib/intake/questions"
+import { ROBOT_VALET } from "@/lib/robot-valet"
 import { saveIntake } from "@/app/actions/intake"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "sonner"
-import { Check, Lock, Save, Sparkles, MapPin, BadgeCheck } from "lucide-react"
+import { Check, Lock, Save, Sparkles, MapPin, BadgeCheck, CarFront } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 type Answers = Record<string, unknown>
@@ -159,6 +160,7 @@ export function IntakeForm({
             <h3 className="text-sm font-semibold">{section.title}</h3>
             <p className="text-sm text-muted-foreground">{section.description}</p>
           </div>
+          {section.id === "valet" ? <RobotValetProgramCard interested={answers.valetInterest === true} /> : null}
           <div className="grid gap-5 sm:grid-cols-2">
             {section.fields.map((field) => (
               <Field
@@ -185,6 +187,66 @@ export function IntakeForm({
           </Button>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * Explainer + monetization framing for the Robot Valet Parking program shown
+ * above the valet intake fields. The interest checkbox below it is the signup.
+ */
+function RobotValetProgramCard({ interested }: { interested: boolean }) {
+  return (
+    <div className="rounded-xl border border-primary/25 bg-primary/5 p-5">
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+          <CarFront className="size-5" />
+        </span>
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h4 className="text-sm font-semibold">{ROBOT_VALET.name}</h4>
+            {interested ? (
+              <Badge className="gap-1 bg-[var(--score-high)] text-white">
+                <Check className="h-3 w-3" /> Interest registered
+              </Badge>
+            ) : (
+              <Badge variant="secondary">Early access</Badge>
+            )}
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">{ROBOT_VALET.blurb}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">How it works</p>
+          <ol className="mt-2 space-y-1.5">
+            {ROBOT_VALET.steps.map((step, i) => (
+              <li key={step} className="flex gap-2 text-xs text-muted-foreground">
+                <span className="flex size-4 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[10px] font-semibold text-primary tabular-nums">
+                  {i + 1}
+                </span>
+                <span className="text-pretty">{step}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-primary">Why property owners sign up</p>
+          <ul className="mt-2 space-y-1.5">
+            {ROBOT_VALET.ownerBenefits.map((b) => (
+              <li key={b} className="flex gap-2 text-xs text-muted-foreground">
+                <Check className="mt-0.5 size-3.5 shrink-0 text-[var(--score-high)]" />
+                <span className="text-pretty">{b}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <p className="mt-4 border-t border-primary/15 pt-3 text-xs text-muted-foreground text-pretty">
+        Launch partner: <span className="font-medium text-foreground">{ROBOT_VALET.partner.name}</span> — {ROBOT_VALET.partner.note} Check the box below to register this property for early access; there&apos;s no commitment.
+      </p>
     </div>
   )
 }

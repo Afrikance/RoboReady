@@ -31,6 +31,7 @@ export const AMENITY_GROUP_LABELS: Record<AmenityGroup, string> = {
 export const NETWORK_AMENITIES: readonly NetworkAmenity[] = [
   { id: "cybercab-pickup", label: "CyberCab / robotaxi pickup", short: "CyberCab pickup", group: "arrival", icon: "Car" },
   { id: "av-staging", label: "Idle-AV staging & parking", short: "AV parking", group: "arrival", icon: "ParkingSquare" },
+  { id: "robot-valet", label: "Robot valet parking (interested)", short: "Robot valet", group: "arrival", icon: "CarFront" },
   { id: "ada-compliant", label: "ADA-compliant loading", short: "ADA loading", group: "accessibility", icon: "Accessibility" },
   { id: "ev-l3", label: "EV Level 3 (DC fast charging)", short: "EV L3 fast", group: "charging", icon: "Zap" },
   { id: "ev-l2", label: "EV Level 2 charging", short: "EV L2", group: "charging", icon: "Plug" },
@@ -121,6 +122,13 @@ export function deriveAmenities(answers: Record<string, unknown>): AmenityId[] {
   const staging = str(a.avStaging)
   if (staging === "Dedicated AV staging" || staging === "Shared lot with spare capacity") {
     out.add("av-staging")
+  }
+
+  // Robot Valet Parking — an interest signal, credible when the owner opted in
+  // and there is real parking to automate. Admins can override before listing.
+  const valetType = str(a.valetParkingType)
+  if (isTrue(a.valetInterest) && ((valetType && valetType !== "None / not applicable") || num(a.valetSpacesAvailable) > 0)) {
+    out.add("robot-valet")
   }
 
   // --- Accessibility ---

@@ -166,6 +166,20 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
     ],
   },
   {
+    id: "valet",
+    title: "Robot Valet Parking",
+    description:
+      "Register interest in the Robot Valet Parking program: drivers pull into a booked, numbered bay, a robot parks the car, and returns it when they're back. Launching with Stanley Robotics (acquired by HL Robotics in 2024). Check the box below to signal you'd like it at this property.",
+    fields: [
+      { id: "valetInterest", label: "Interested in Robot Valet Parking at this property", type: "boolean", help: "Signals to RoboArrival that you'd like the robotic valet program here. No commitment — it flags you for early access." },
+      { id: "valetParkingType", label: "Type of parking that could be automated", type: "select", options: ["Airport long-term lot", "Hotel / resort garage", "Standalone parking structure", "Surface lot", "None / not applicable"] },
+      { id: "valetSpacesAvailable", label: "Parking spaces that could be robot-managed", type: "number", placeholder: "e.g. 200" },
+      { id: "valetDropoffBays", label: "Potential booked drop-off / return bays", type: "number", placeholder: "e.g. 4" },
+      { id: "valetTimeline", label: "Desired go-live", type: "select", options: ["Just registering interest", "Exploring", "Within 12 months", "12+ months"] },
+      { id: "valetNotes", label: "Anything else about your parking operation?", type: "textarea", placeholder: "Current valet/self-park mix, peak occupancy, structure height, existing automation..." },
+    ],
+  },
+  {
     id: "goals",
     title: "Automation Goals",
     description: "What the operator wants robots and autonomous systems to do here.",
