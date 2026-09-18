@@ -10,6 +10,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: "Features", href: "/#features" },
       { label: "Pricing", href: "/#pricing" },
       { label: "How it works", href: "/how-it-works" },
+      { label: "Properties Network", href: "/network" },
     ],
   },
   {
@@ -17,6 +18,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
     links: [
       { label: "Get started", href: "/sign-up" },
       { label: "Sign in", href: "/sign-in" },
+      { label: "Dashboard", href: "/dashboard" },
       { label: "Contact", href: "mailto:hello@roboready.app" },
     ],
   },
