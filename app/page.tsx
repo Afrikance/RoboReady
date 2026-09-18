@@ -174,7 +174,7 @@ export default async function LandingPage() {
     className="text-primary hover:underline"
   >
     StaffGPT
-  </a>{" "}clearAdd robot parking
+  </a>{" "}clearAdd robot parkingthe int
   AI Workforce Technology.
 </p>
 

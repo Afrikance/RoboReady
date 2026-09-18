@@ -3,7 +3,6 @@
 import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { generateImage } from "ai"
-import { gateway } from "@ai-sdk/gateway"
 import { put } from "@vercel/blob"
 import { db } from "@/lib/db"
 import { property, propertyPlan, document } from "@/lib/db/schema"
@@ -44,7 +43,11 @@ async function renderPlanImage(
 ): Promise<string | null> {
   try {
     const { image } = await generateImage({
-      model: gateway.imageModel(IMAGE_MODEL),
+      // Plain "provider/model" id routes through Vercel AI Gateway automatically
+      // (zero-config on Vercel/v0). Avoids a hard dependency on @ai-sdk/gateway,
+      // which is only a transitive dep of `ai` and does not resolve in the
+      // production build.
+      model: IMAGE_MODEL,
       prompt,
     })
     const pathname = `orgs/${ctx.organizationId}/properties/${propertyId}/plans/${crypto.randomUUID()}-${category}.png`
