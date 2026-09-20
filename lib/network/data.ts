@@ -258,37 +258,103 @@ async function latestScore(propertyId: string): Promise<number | null> {
 }
 
 /**
- * Re-derives a published listing's amenities and re-snapshots its score +
- * coordinates from the property's latest assessment. No-op when the property
- * has no listing (publishing is opt-in). Called on assessment finalize so an
- * already-listed property stays current; best-effort, never throws upstream.
+ * The visibility every property is auto-listed at when it first enters the
+ * network. Signed-in users (and above) can discover it immediately; anonymous
+ * visitors on the public /network page cannot — that avoids broadcasting a
+ * client's name + street address on the open internet. An admin can promote a
+ * listing to `public` or hide it (`none`) from the property's network panel.
+ */
+const AUTO_LIST_DEFAULT_VISIBILITY: NetworkVisibility = "signed_in"
+
+/** True if the property has at least one assessment (any RoboReady score). */
+async function hasAnyAssessment(propertyId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: assessment.id })
+    .from(assessment)
+    .where(eq(assessment.propertyId, propertyId))
+    .limit(1)
+  return !!row
+}
+
+/**
+ * Ensures a property is represented in the RoboArrival network and keeps its
+ * listing current.
+ *
+ * Auto-entry policy: every assessed property — regardless of RoboReady score —
+ * and every property with at least one amenity enters the network
+ * automatically, visible to signed-in users immediately. Re-derives amenities
+ * and re-snapshots score + coordinates from the property's latest
+ * assessment/intake, so a listed property stays up to date "from time to time"
+ * (called on every assessment finalize and intake save).
+ *
+ * An existing listing's admin-controlled fields (visibility, headline, blurb,
+ * amenity overrides) are always preserved — an admin who hid a listing (`none`)
+ * or promoted it to `public` is never overridden here. Best-effort; callers
+ * invoke it inside try/catch so it never blocks their primary work.
  */
 export async function syncListingFromAssessment(propertyId: string): Promise<void> {
-  const listing = await getListingByProperty(propertyId)
-  if (!listing) return
-
-  const [answers, score, prop] = await Promise.all([
+  const [answers, score, assessed, prop, listing] = await Promise.all([
     latestIntakeAnswers(propertyId),
     latestScore(propertyId),
+    hasAnyAssessment(propertyId),
     db.select().from(property).where(eq(property.id, propertyId)).limit(1).then((r) => r[0] ?? null),
+    getListingByProperty(propertyId),
   ])
 
   const derived = deriveAmenities(answers)
-  const overrides = (listing.amenityOverrides as { added?: string[]; removed?: string[] } | null) ?? {}
-  const resolved = resolveAmenities(derived, overrides)
 
+  if (listing) {
+    // Existing listing → refresh derived data, preserve admin choices.
+    const overrides = (listing.amenityOverrides as { added?: string[]; removed?: string[] } | null) ?? {}
+    const resolved = resolveAmenities(derived, overrides)
+    await db
+      .update(networkListing)
+      .set({
+        derivedAmenities: derived,
+        amenities: resolved,
+        roboReadyScore: score,
+        latitude: prop?.latitude ?? listing.latitude,
+        longitude: prop?.longitude ?? listing.longitude,
+        city: prop?.city ?? listing.city,
+        region: prop?.region ?? listing.region,
+        country: prop?.country ?? listing.country,
+        updatedAt: new Date(),
+      })
+      .where(eq(networkListing.id, listing.id))
+    return
+  }
+
+  // No listing yet → auto-create when the property qualifies: it has been
+  // assessed (any score) or it has at least one amenity. Nothing to list for a
+  // bare prospect with no assessment and no amenities.
+  if (!prop) return
+  if (!assessed && derived.length === 0) return
+
+  const now = new Date()
   await db
-    .update(networkListing)
-    .set({
+    .insert(networkListing)
+    .values({
+      id: crypto.randomUUID(),
+      propertyId,
+      organizationId: prop.organizationId,
+      visibility: AUTO_LIST_DEFAULT_VISIBILITY,
+      amenities: derived,
       derivedAmenities: derived,
-      amenities: resolved,
+      amenityOverrides: {},
+      headline: null,
+      blurb: null,
+      latitude: prop.latitude,
+      longitude: prop.longitude,
+      city: prop.city,
+      region: prop.region,
+      country: prop.country,
       roboReadyScore: score,
-      latitude: prop?.latitude ?? listing.latitude,
-      longitude: prop?.longitude ?? listing.longitude,
-      city: prop?.city ?? listing.city,
-      region: prop?.region ?? listing.region,
-      country: prop?.country ?? listing.country,
-      updatedAt: new Date(),
+      liveStatus: {},
+      publishedAt: now,
+      publishedByUserId: null,
+      updatedAt: now,
     })
-    .where(eq(networkListing.id, listing.id))
+    // A concurrent finalize + intake save could both try to create the row;
+    // the one-listing-per-property unique index makes the loser a no-op.
+    .onConflictDoNothing({ target: networkListing.propertyId })
 }

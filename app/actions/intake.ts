@@ -6,6 +6,7 @@ import { db } from "@/lib/db"
 import { intakeSubmission, property } from "@/lib/db/schema"
 import { hasRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { intakeCompletion } from "@/lib/intake/questions"
+import { syncListingFromAssessment } from "@/lib/network/data"
 import type { ActionResult } from "@/app/actions/properties"
 
 /** Clears any Field Work claim stored on a property's metadata.pipeline. */
@@ -114,6 +115,17 @@ export async function saveIntake(
     entityId: id,
     metadata: { propertyId, completion },
   })
+
+  // Any property with amenities enters the RoboArrival network automatically
+  // and stays updated. Intake answers are what amenities are derived from, so
+  // re-sync here on every save. Best-effort — never blocks the intake save.
+  try {
+    await syncListingFromAssessment(propertyId)
+    revalidatePath("/network")
+    revalidatePath("/dashboard/network")
+  } catch (err) {
+    console.log("[v0] syncListingFromAssessment (intake) failed:", (err as Error).message)
+  }
 
   revalidatePath(`/dashboard/properties/${propertyId}`)
   return { ok: true, data: { id, completion } }
