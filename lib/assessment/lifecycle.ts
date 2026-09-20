@@ -321,9 +321,11 @@ async function stepFinalize(run: Run): Promise<void> {
     ownerUserId: run.createdByUserId,
   })
 
-  // Keep an existing RoboArrival network listing in sync with the fresh
-  // assessment (re-derive amenities, re-snapshot score + coordinates). No-op
-  // if the property was never published. Best-effort — never blocks finalize.
+  // Every assessed property enters the RoboArrival network automatically
+  // (regardless of RoboReady score) and stays current: this auto-creates the
+  // listing if absent, else re-derives amenities and re-snapshots score +
+  // coordinates. Admin visibility/copy choices are preserved. Best-effort —
+  // never blocks finalize.
   try {
     await syncListingFromAssessment(run.propertyId)
   } catch (err) {
