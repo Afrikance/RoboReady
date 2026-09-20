@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+y property with ameimport type { Metadata } from "next"
 import { LegalShell } from "@/components/marketing/legal-shell"
 
 export const metadata: Metadata = {
