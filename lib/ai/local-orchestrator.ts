@@ -3,7 +3,7 @@ import "server-only"
 import { generateText, Output } from "ai"
 import type { z } from "zod"
 import type { StaffGPTAdapter, DispatchRequest, DispatchResult } from "@/lib/ai/adapter"
-import { getEmployee } from "@/lib/ai/employees"
+import { getEmployee, type AIEmployee } from "@/lib/ai/employees"
 import {
   assessmentSchema,
   premiumAssessmentSchema,
@@ -23,8 +23,10 @@ import {
 
 const MODEL = "google/gemini-3.5-flash"
 
+export type AiJobDef = { schema: z.ZodTypeAny; instructions: string }
+
 // jobType → schema + task instructions. Adding a new AI job = adding an entry.
-const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
+const JOBS: Record<string, AiJobDef> = {
   assessment: {
     schema: assessmentSchema,
     instructions:
@@ -103,6 +105,25 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
   },
 }
 
+/** Looks up an AI job definition (schema + instructions) by jobType. */
+export function getJob(jobType: string): AiJobDef | undefined {
+  return JOBS[jobType]
+}
+
+/**
+ * Builds the RoboReady-authoritative system prompt for a job. Shared by the
+ * LocalOrchestrator and the StaffGPT adapter so a job behaves identically no
+ * matter which provider fulfils it — RoboReady owns the persona + task.
+ */
+export function buildJobSystem(employee: AIEmployee, job: AiJobDef): string {
+  return [
+    `You are ${employee.name}, a ${employee.title} on the ${employee.department} team.`,
+    `Mission: ${employee.mission}`,
+    `Task: ${job.instructions}`,
+    `Respond only with data that fits the required schema.`,
+  ].join("\n")
+}
+
 /**
  * Fulfils AI-employee jobs locally via the Vercel AI Gateway. This is the
  * default adapter until the real StaffGPT API is available. It deliberately
@@ -117,12 +138,7 @@ export class LocalOrchestrator implements StaffGPTAdapter {
     const job = JOBS[req.jobType]
     if (!job) throw new Error(`Unknown jobType: ${req.jobType}`)
 
-    const system = [
-      `You are ${employee.name}, a ${employee.title} on the ${employee.department} team.`,
-      `Mission: ${employee.mission}`,
-      `Task: ${job.instructions}`,
-      `Respond only with data that fits the required schema.`,
-    ].join("\n")
+    const system = buildJobSystem(employee, job)
 
     const result = await generateText({
       model: MODEL,
