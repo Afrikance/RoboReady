@@ -18,6 +18,7 @@ export type EmployeeSlug =
   | "property-prospector"
   | "intake-prefiller"
   | "support-concierge"
+  | "network-navigator"
 
 export type AIEmployee = {
   slug: EmployeeSlug
@@ -137,6 +138,15 @@ export const AI_EMPLOYEES: Record<EmployeeSlug, AIEmployee> = {
     department: "Support",
     mission:
       "Be the friendly front door to RoboReady: answer questions about what RoboReady does, how assessments and pricing work, and guide visitors to the right next step — then capture their details so a human can follow up.",
+    requiresApproval: false,
+  },
+  "network-navigator": {
+    slug: "network-navigator",
+    name: "Atlas",
+    title: "Network Search Navigator",
+    department: "Operations",
+    mission:
+      "Power RoboSearch: turn a visitor's plain-English request into the right autonomous-ready properties from the RoboArrival network, ranking real listings by how well they match and explaining each match — never inventing a property or an attribute.",
     requiresApproval: false,
   },
 }

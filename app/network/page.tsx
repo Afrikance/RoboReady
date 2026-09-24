@@ -5,7 +5,7 @@ import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/marketing/site-footer"
 import { NetworkExplorer } from "@/components/network/network-explorer"
-import { resolveNetworkAudience, searchNetwork } from "@/lib/network/data"
+import { orgHasProNetworkAccess, resolveNetworkAudience, searchNetwork } from "@/lib/network/data"
 
 export const metadata = {
   title: "Autonomous Ready Properties Network — powered by RoboArrival",
@@ -18,7 +18,7 @@ export default async function NetworkPage() {
   const signedIn = !!session?.user
 
   const { audience, isCarePlan } = await resolveNetworkAudience()
-  const listings = await searchNetwork({}, audience)
+  const [listings, aiEnabled] = await Promise.all([searchNetwork({}, audience), orgHasProNetworkAccess()])
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -55,7 +55,7 @@ export default async function NetworkPage() {
           </p>
         </div>
 
-        <NetworkExplorer listings={listings} signedIn={signedIn} isCarePlan={isCarePlan} />
+        <NetworkExplorer listings={listings} signedIn={signedIn} isCarePlan={isCarePlan} aiEnabled={aiEnabled} />
       </main>
 
       <SiteFooter />
