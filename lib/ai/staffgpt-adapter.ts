@@ -7,12 +7,36 @@ import { LocalOrchestrator, getJob, buildJobSystem } from "@/lib/ai/local-orches
 
 const API_PREFIX = "/api/v1"
 
-/** Shape of an employee row returned by GET /employees (fields are best-effort). */
+/** Shape of an employee row returned by GET /employees. */
 type StaffGptEmployee = {
   slug?: string
   codename?: string
+  role?: string
   name?: string
   department?: string
+}
+
+/**
+ * Resolves whatever the user put in STAFFGPT_API_URL to the API root
+ * `<origin>/api/v1`. Tolerant of an origin, a trailing slash, or even a full
+ * endpoint URL being pasted in (e.g. ".../api/v1/dispatch") — we always reduce
+ * to the origin and re-append the version prefix.
+ */
+function normalizeApiRoot(raw: string): string {
+  try {
+    return new URL(raw).origin + API_PREFIX
+  } catch {
+    return raw.replace(/\/+$/, "").replace(/\/api\/v1(\/.*)?$/, "") + API_PREFIX
+  }
+}
+
+/**
+ * STAFFGPT_DEPARTMENT must be a slug (e.g. "roboready"). Guard against a URL or
+ * other non-slug value being set by mistake — fall back to "roboready".
+ */
+function sanitizeDepartment(raw: string | undefined): string {
+  const t = (raw ?? "").trim()
+  return t && !/[:/\s]/.test(t) ? t : "roboready"
 }
 
 /**
@@ -42,16 +66,18 @@ type StaffGptEmployee = {
 export class StaffGPTApiAdapter implements StaffGPTAdapter {
   readonly kind = "staffgpt" as const
 
-  private readonly baseUrl: string
+  private readonly apiRoot: string
+  private readonly department: string
   private readonly local = new LocalOrchestrator()
   private employeeCache: StaffGptEmployee[] | null = null
 
   constructor(
     baseUrl: string,
     private readonly apiKey: string,
-    private readonly department: string = "roboready",
+    department: string = "roboready",
   ) {
-    this.baseUrl = baseUrl.replace(/\/+$/, "")
+    this.apiRoot = normalizeApiRoot(baseUrl)
+    this.department = sanitizeDepartment(department)
   }
 
   async dispatch<TInput, TOutput>(req: DispatchRequest<TInput>): Promise<DispatchResult<TOutput>> {
@@ -169,7 +195,7 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
   }
 
   private api(method: string, path: string, body?: unknown): Promise<Response> {
-    return fetch(`${this.baseUrl}${API_PREFIX}${path}`, {
+    return fetch(`${this.apiRoot}${path}`, {
       method,
       headers: {
         "content-type": "application/json",
