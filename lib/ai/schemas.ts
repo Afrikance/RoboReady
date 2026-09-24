@@ -4,6 +4,36 @@ import { z } from "zod"
 // output — clamp lengths in code instead.
 
 // ---------------------------------------------------------------------------
+// RoboSearch — AI natural-language search over the RoboArrival network.
+// The navigator receives the user's plain-English query, the amenity catalog,
+// and the set of listings the viewer is allowed to see, then returns a concise
+// interpretation, the amenity ids it understood, and the best-matching
+// candidates ranked most-relevant-first. It must only ever reference candidate
+// ids that were provided — it cannot invent a property or an attribute.
+// ---------------------------------------------------------------------------
+
+export const networkSearchSchema = z.object({
+  interpretation: z
+    .string()
+    .describe("One concise sentence restating what the user is looking for, in plain language."),
+  understoodAmenities: z
+    .array(z.string())
+    .describe("Amenity ids (only from the provided amenityCatalog) that the query implies. Empty if none."),
+  results: z
+    .array(
+      z.object({
+        id: z.string().describe("A candidate listing id, copied EXACTLY from the provided candidates."),
+        reason: z
+          .string()
+          .describe("One short sentence on why this property matches, citing the candidate's real attributes."),
+      }),
+    )
+    .describe("Genuinely relevant candidates only, most relevant first. Omit poor matches; empty array if none match."),
+})
+
+export type NetworkSearchOutput = z.infer<typeof networkSearchSchema>
+
+// ---------------------------------------------------------------------------
 // RoboReady Readiness Score — canonical robotaxi/autonomous-arrival model
 // (master spec §5). A 100-point scale across 8 fixed-weight categories, built
 // entirely around the primary use case: autonomous robotaxi/CyberCab arrival.

@@ -7,11 +7,13 @@ import {
   intakeSubmission,
   networkAvEvent,
   networkListing,
+  payment,
   property,
   serviceSubscription,
 } from "@/lib/db/schema"
 import { getOrgContext, getSessionUser } from "@/lib/tenancy"
 import { isAdminRole } from "@/lib/access"
+import { tierRank } from "@/lib/products"
 import { deriveAmenities, resolveAmenities, type AmenityId } from "@/lib/network/amenities"
 import {
   allowedVisibilitiesFor,
@@ -82,6 +84,34 @@ export async function isCarePlanMember(userId: string): Promise<boolean> {
     .where(and(eq(serviceSubscription.createdByUserId, userId), eq(serviceSubscription.status, "active")))
     .limit(1)
   return rows.length > 0
+}
+
+/**
+ * RoboSearch (AI natural-language network search) is a premium feature that
+ * unlocks at the "Quality Pro Report" tier and above. Access is an
+ * organization-level entitlement: an org may use it once it owns at least one
+ * property assessed at `pro` or `premium`. Admins always have access.
+ *
+ * Grounded in real paid tiers (the `payment` rows), never a client claim.
+ * Returns false for anonymous visitors (no org). Never throws.
+ */
+export async function orgHasProNetworkAccess(): Promise<boolean> {
+  const ctx = await getOrgContext()
+  if (!ctx) return false
+  if (isAdminRole(ctx.role)) return true
+
+  const rows = await db
+    .select({ tier: payment.tier })
+    .from(payment)
+    .where(
+      and(
+        eq(payment.organizationId, ctx.organizationId),
+        eq(payment.kind, "assessment"),
+        eq(payment.status, "paid"),
+      ),
+    )
+  const proRank = tierRank("pro")
+  return rows.some((r) => r.tier != null && tierRank(r.tier) >= proRank)
 }
 
 export type ResolvedAudience = {

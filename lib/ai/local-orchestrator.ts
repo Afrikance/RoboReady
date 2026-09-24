@@ -18,6 +18,7 @@ import {
   proposalSchema,
   prospectPropertiesSchema,
   intakePrefillSchema,
+  networkSearchSchema,
 } from "@/lib/ai/schemas"
 
 const MODEL = "google/gemini-3.5-flash"
@@ -94,6 +95,11 @@ const JOBS: Record<string, { schema: z.ZodTypeAny; instructions: string }> = {
     schema: intakePrefillSchema,
     instructions:
       "You are the Intake Pre-Filler. The input includes the property, its type, and a `fields` list (each with id, label, type, and options). Fill ONLY the intake fields you can answer with medium-to-high confidence from general public knowledge of this property or of how this KIND of property is typically built (e.g. a modern hotel usually has automatic sliding doors and standard elevators). Use ONLY field ids from the provided list. For select/multiselect fields, choose only from the given options (multiselect = comma-separated). For boolean fields use 'true'/'false'. NEVER guess exact on-site measurements (corridor/path widths in cm, elevation change, precise counts) or anything requiring a site visit — put those field ids in `leftBlank` for the field operator. It is correct and expected to leave many fields blank. Summarize what you filled versus what you left for the operator.",
+  },
+  "network-search": {
+    schema: networkSearchSchema,
+    instructions:
+      "You are the Network Search Navigator powering RoboSearch. The input has `query` (the visitor's plain-English request), `amenityCatalog` (the ONLY valid amenity ids, each with a label), and `candidates` (the autonomous-ready properties the viewer may see — each with id, name, propertyType, city, region, roboReadyScore, and amenities). Do THREE things: (1) write a one-sentence `interpretation` restating what they want; (2) set `understoodAmenities` to the amenity ids from the catalog that the query implies (e.g. 'fast charging' → 'ev-l3'; empty if none); (3) return `results` — the candidates that genuinely match, ordered most-relevant-first, each with a short `reason` citing that candidate's REAL attributes (its amenities, city/region, propertyType, or score). Interpret location, amenity, property-type, and score intent from the query (e.g. 'near Dallas' → match city/region; 'high score' → prefer higher roboReadyScore). CRITICAL RULES: every result `id` MUST be copied exactly from `candidates` — never invent a property. Never claim an amenity or fact a candidate does not have. Omit weak matches rather than padding. If nothing fits, return an empty `results` array and say so in `interpretation`.",
   },
 }
 

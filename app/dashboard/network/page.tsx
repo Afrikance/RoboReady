@@ -1,11 +1,11 @@
 import { NetworkExplorer } from "@/components/network/network-explorer"
-import { resolveNetworkAudience, searchNetwork } from "@/lib/network/data"
+import { orgHasProNetworkAccess, resolveNetworkAudience, searchNetwork } from "@/lib/network/data"
 
 export const metadata = { title: "Network" }
 
 export default async function DashboardNetworkPage() {
   const { audience, isCarePlan } = await resolveNetworkAudience()
-  const listings = await searchNetwork({}, audience)
+  const [listings, aiEnabled] = await Promise.all([searchNetwork({}, audience), orgHasProNetworkAccess()])
 
   return (
     <div className="space-y-6">
@@ -18,7 +18,7 @@ export default async function DashboardNetworkPage() {
         </p>
       </div>
 
-      <NetworkExplorer listings={listings} signedIn isCarePlan={isCarePlan} />
+      <NetworkExplorer listings={listings} signedIn isCarePlan={isCarePlan} aiEnabled={aiEnabled} />
     </div>
   )
 }
