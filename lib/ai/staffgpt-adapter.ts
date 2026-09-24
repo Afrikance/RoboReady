@@ -14,6 +14,7 @@ type StaffGptEmployee = {
   role?: string
   name?: string
   department?: string
+  kind?: string
 }
 
 /**
@@ -148,9 +149,13 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
 
   /**
    * Finds the StaffGPT employee to dispatch to inside the RoboReady department.
-   * Prefers an exact slug/codename/name match with the RoboReady employee, else
-   * the first employee in the department. Throws (→ local fallback) when the
-   * department is empty or missing, with an actionable message.
+   * Prefers an exact slug/codename/name match with the RoboReady employee.
+   * RoboReady's own slugs (e.g. "network-navigator") usually won't match the
+   * department's "rr-*" slugs, so the fallback is the department orchestrator
+   * (Atlas) — RoboReady owns the persona via `instructions`, so the orchestrator
+   * is the correct general-purpose runner — else the first employee. Throws
+   * (→ local fallback) when the department is empty/missing, with an actionable
+   * message.
    */
   private async resolveEmployee(slug: string, name: string): Promise<string> {
     const employees = await this.listEmployees()
@@ -162,6 +167,7 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
     const match =
       employees.find((e) => e.slug === slug || e.codename === slug) ??
       employees.find((e) => e.name === name) ??
+      employees.find((e) => e.kind === "orchestrator") ??
       employees[0]
     const id = match.slug ?? match.codename ?? match.name
     if (!id) throw new Error(`StaffGPT department "${this.department}" employee has no usable identifier`)
