@@ -671,3 +671,60 @@ export const proposalSchema = z.object({
   ),
 })
 export type ProposalOutput = z.infer<typeof proposalSchema>
+
+// ---------------------------------------------------------------------------
+// RoboSearch discovery (RoboScout · DISCOVER_ENTITY)
+//
+// The research engine's first flow. RoboScout is asked to find CANDIDATE
+// entities in the autonomous world for a target market/kind and return them as
+// a *proposal* — every fact is a claim carrying its own evidence, confidence,
+// and (best-effort) source. Nothing here is trusted: a human reviews the
+// proposal and only on approval are entities/claims/sources promoted into the
+// RoboGraph. The model must NEVER present an unverified fact as established;
+// unknown source ⇒ leave the url empty and lower the confidence.
+// ---------------------------------------------------------------------------
+
+export const robosearchDiscoverySchema = z.object({
+  interpretation: z
+    .string()
+    .describe("One concise sentence restating the discovery request in plain language."),
+  entities: z.array(
+    z.object({
+      kind: z
+        .enum([
+          "company",
+          "robot",
+          "autonomous_vehicle",
+          "property",
+          "location",
+          "operator",
+          "service",
+          "infrastructure",
+          "amenity",
+          "media",
+        ])
+        .describe("The canonical RoboGraph entity kind."),
+      name: z.string().describe("The entity's canonical, human-readable name."),
+      summary: z.string().describe("One or two neutral sentences describing the entity."),
+      confidence: z
+        .enum(["low", "medium", "high"])
+        .describe("Confidence that this entity genuinely exists as described."),
+      claims: z.array(
+        z.object({
+          predicate: z
+            .string()
+            .describe("A snake_case fact key, e.g. has_ev_charging, category, operates_in, payload_kg."),
+          value: z.string().describe("The fact value as a short string (numbers/booleans as text)."),
+          confidence: z.enum(["low", "medium", "high"]),
+          evidence: z.string().describe("Why this claim is believed — the justification, in plain language."),
+          sourceUrl: z.string().describe("Best-effort source URL, or an empty string if none is known."),
+          sourceTitle: z.string().describe("Best-effort source title/publisher, or an empty string."),
+        }),
+      ),
+    }),
+  ),
+  note: z
+    .string()
+    .describe("A short honesty note: how confident overall, what is unverified, what a human should check."),
+})
+export type RobosearchDiscoveryOutput = z.infer<typeof robosearchDiscoverySchema>
