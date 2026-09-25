@@ -19,6 +19,7 @@ import {
   prospectPropertiesSchema,
   intakePrefillSchema,
   networkSearchSchema,
+  robosearchDiscoverySchema,
 } from "@/lib/ai/schemas"
 
 const MODEL = "google/gemini-3.5-flash"
@@ -97,6 +98,11 @@ const JOBS: Record<string, AiJobDef> = {
     schema: intakePrefillSchema,
     instructions:
       "You are the Intake Pre-Filler. The input includes the property, its type, and a `fields` list (each with id, label, type, and options). Fill ONLY the intake fields you can answer with medium-to-high confidence from general public knowledge of this property or of how this KIND of property is typically built (e.g. a modern hotel usually has automatic sliding doors and standard elevators). Use ONLY field ids from the provided list. For select/multiselect fields, choose only from the given options (multiselect = comma-separated). For boolean fields use 'true'/'false'. NEVER guess exact on-site measurements (corridor/path widths in cm, elevation change, precise counts) or anything requiring a site visit — put those field ids in `leftBlank` for the field operator. It is correct and expected to leave many fields blank. Summarize what you filled versus what you left for the operator.",
+  },
+  "discover-entity": {
+    schema: robosearchDiscoverySchema,
+    instructions:
+      "You are RoboScout, the discovery specialist for RoboSearch — the intelligence engine that maps the autonomous world (robots, manufacturers, operators, autonomous vehicles, autonomous-ready properties, infrastructure, and the companies behind them). The input has `market` (a place or segment to search), `entityKind` (the canonical RoboGraph kind to find), and `count` (roughly how many candidates to propose). Propose up to `count` REAL, CANDIDATE entities of that kind relevant to that market. For each entity give its canonical `name`, a neutral `summary`, an overall `confidence`, and a set of `claims` — each claim is one fact with a snake_case `predicate`, a short `value`, its own `confidence`, plain-language `evidence`, and a best-effort `sourceUrl`/`sourceTitle`. FUNDAMENTAL RULE: AI may propose, evidence establishes. You are producing a proposal a human will review — you are NOT writing to the database. NEVER present an unverified fact as established: when you do not know a real source, leave `sourceUrl` and `sourceTitle` as empty strings and set that claim's confidence to 'low'. Do not fabricate precise URLs, addresses, or statistics you are not confident about. Prefer well-known real entities you are genuinely confident exist. Use the `note` to state honestly how much is unverified and what a human curator should check.",
   },
   "network-search": {
     schema: networkSearchSchema,

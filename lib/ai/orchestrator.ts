@@ -13,7 +13,13 @@ import { getEmployee, type EmployeeSlug } from "@/lib/ai/employees"
 export function getAdapter(): StaffGPTAdapter {
   const url = process.env.STAFFGPT_API_URL
   const key = process.env.STAFFGPT_API_KEY
-  if (url && key) return new StaffGPTApiAdapter(url, key, process.env.STAFFGPT_DEPARTMENT || "roboready")
+  if (url && key)
+    return new StaffGPTApiAdapter(
+      url,
+      key,
+      process.env.STAFFGPT_DEPARTMENT || "roboready",
+      process.env.STAFFGPT_ROBOSEARCH_DEPARTMENT || "robosearch",
+    )
   return new LocalOrchestrator()
 }
 

@@ -655,3 +655,154 @@ export const networkAvEvent = pgTable("network_av_event", {
   createdByUserId: text("createdByUserId"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+// ---------------------------------------------------------------------------
+// RoboGraph — the RoboSearch intelligence layer (detachable module)
+//
+// These tables belong to RoboSearch, NOT to RoboReady's operational domain.
+// They model the canonical knowledge graph of the autonomous world (entities +
+// relationships) plus the provenance system that makes it a living knowledge
+// base rather than an AI-generated directory. The governing rule is
+// "AI may propose. Evidence establishes." — AI research produces a *proposal*
+// (a robosearch_research_job) that a human reviews before anything is promoted
+// into the graph as active/accepted. Every table is prefixed `robosearch_` to
+// keep the module boundary explicit and additive: nothing here references or
+// mutates the existing RoboReady tables, so RoboSearch could later detach into
+// its own service without a rewrite (the "detach test").
+// ---------------------------------------------------------------------------
+
+// A canonical node in the RoboGraph. Polymorphic by `kind` with typed facts
+// carried as claims (see robosearch_claim) rather than rigid columns, so the
+// graph can grow new entity kinds without migrations.
+export const robosearchEntity = pgTable(
+  "robosearch_entity",
+  {
+    id: text("id").primaryKey(),
+    // company | robot | autonomous_vehicle | property | location | operator |
+    // service | infrastructure | amenity | media
+    kind: text("kind").notNull(),
+    canonicalName: text("canonicalName").notNull(),
+    // URL-safe handle for /robosearch/<kind>/<slug>; unique within a kind.
+    slug: text("slug"),
+    summary: text("summary"),
+    // Lightweight denormalized facets for fast filtering (city, region,
+    // category, etc). The authoritative, provenance-bearing facts are claims.
+    attributes: jsonb("attributes").notNull().default({}),
+    // candidate | active | merged | rejected. A discovery proposal creates
+    // `candidate` rows; human approval promotes them to `active`.
+    status: text("status").notNull().default("candidate"),
+    // unverified | business_verified | roboready_verified
+    verification: text("verification").notNull().default("unverified"),
+    // low | medium | high — aggregate confidence in the entity's existence.
+    confidence: text("confidence").notNull().default("low"),
+    // Normalized key the resolver uses to detect duplicates (lowercased name).
+    dedupeKey: text("dedupeKey"),
+    // When status='merged', the surviving entity this one folded into.
+    mergedIntoId: text("mergedIntoId"),
+    // The research job that first proposed this entity (traceability).
+    discoveredByJobId: text("discoveredByJobId"),
+    createdByUserId: text("createdByUserId"),
+    reviewedByUserId: text("reviewedByUserId"),
+    reviewedAt: timestamp("reviewedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    slugPerKind: unique().on(t.kind, t.slug),
+  }),
+)
+
+// An evidence source backing one or more claims. Provenance is first-class:
+// every established fact points at where it came from.
+export const robosearchSource = pgTable("robosearch_source", {
+  id: text("id").primaryKey(),
+  url: text("url"),
+  title: text("title"),
+  publisher: text("publisher"),
+  // website | news | filing | manual | ai_inference
+  sourceType: text("sourceType").notNull().default("ai_inference"),
+  // Verbatim excerpt / snapshot supporting the claim, for later re-checking.
+  snapshot: text("snapshot"),
+  retrievedAt: timestamp("retrievedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// A single fact about an entity, with full provenance. This is what turns the
+// graph into a living knowledge base: not "Hotel has EV charging" but that
+// claim + its source + confidence + verification + recheck window.
+export const robosearchClaim = pgTable("robosearch_claim", {
+  id: text("id").primaryKey(),
+  entityId: text("entityId").notNull(),
+  // Machine predicate, e.g. has_ev_charging | category | operates_in |
+  // robot_delivery | payload_kg. Free-form but curated by the taxonomy.
+  predicate: text("predicate").notNull(),
+  // The claim's value (string | number | boolean | structured), as JSON.
+  objectValue: jsonb("objectValue"),
+  sourceId: text("sourceId"),
+  // low | medium | high
+  confidence: text("confidence").notNull().default("low"),
+  // unverified | business_verified | roboready_verified
+  verification: text("verification").notNull().default("unverified"),
+  // Human-readable justification the AI or curator recorded.
+  evidence: text("evidence"),
+  // proposed | accepted | rejected | superseded
+  status: text("status").notNull().default("proposed"),
+  discoveredAt: timestamp("discoveredAt"),
+  lastCheckedAt: timestamp("lastCheckedAt"),
+  expiresAt: timestamp("expiresAt"),
+  createdByJobId: text("createdByJobId"),
+  reviewedByUserId: text("reviewedByUserId"),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
+
+// A directed relationship between two entities (the "graph" edges). Carries its
+// own confidence + source so relationships are provenance-bearing too.
+export const robosearchEdge = pgTable("robosearch_edge", {
+  id: text("id").primaryKey(),
+  subjectEntityId: text("subjectEntityId").notNull(),
+  // manufactures | operates | rents | owns | located_at | supports | near |
+  // picks_up_at | compatible_with | manufactured_by
+  predicate: text("predicate").notNull(),
+  objectEntityId: text("objectEntityId").notNull(),
+  confidence: text("confidence").notNull().default("low"),
+  sourceId: text("sourceId"),
+  // proposed | accepted | rejected
+  status: text("status").notNull().default("proposed"),
+  createdByJobId: text("createdByJobId"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+})
+
+// The StaffGPT ↔ RoboSearch job interface. A research job records what the AI
+// workforce was asked to do and the *proposal* it produced. It is NEVER
+// auto-applied to the graph: a human reviews `proposal` and approves or
+// rejects, and only on approval are entities/claims/sources promoted. This is
+// the enforcement point for "AI may propose. Evidence establishes."
+export const robosearchResearchJob = pgTable("robosearch_research_job", {
+  id: text("id").primaryKey(),
+  organizationId: text("organizationId").notNull(),
+  // DISCOVER_ENTITY | RESEARCH_ENTITY | VERIFY_ENTITY | RESOLVE_DUPLICATE |
+  // ANALYZE_PROPERTY | UPDATE_ENTITY | CREATE_CONTENT | FIND_LEADS |
+  // ANALYZE_SEARCHES
+  jobKind: text("jobKind").notNull(),
+  // queued | running | proposed | approved | rejected | failed
+  status: text("status").notNull().default("queued"),
+  // The request parameters (e.g. { market, entityKind, count }).
+  input: jsonb("input"),
+  // The AI's structured proposal: candidate entities, claims, sources, notes.
+  proposal: jsonb("proposal"),
+  // Link to the traceable ai_job row the dispatch created.
+  aiJobId: text("aiJobId"),
+  // Which specialist produced it (RoboScout, RoboResearcher, ...).
+  employeeSlug: text("employeeSlug"),
+  summary: text("summary"),
+  error: text("error"),
+  // How many entities the approval promoted into the graph (audit convenience).
+  promotedEntityCount: integer("promotedEntityCount").notNull().default(0),
+  createdByUserId: text("createdByUserId").notNull(),
+  reviewedByUserId: text("reviewedByUserId"),
+  reviewedAt: timestamp("reviewedAt"),
+  createdAt: timestamp("createdAt").notNull().defaultNow(),
+  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+})
