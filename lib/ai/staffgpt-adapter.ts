@@ -32,13 +32,34 @@ function normalizeApiRoot(raw: string): string {
 }
 
 /**
- * STAFFGPT_DEPARTMENT must be a slug (e.g. "roboready"). Guard against a URL or
- * other non-slug value being set by mistake — fall back to "roboready".
+ * A StaffGPT department value must be a slug (e.g. "roboready"). Guard against a
+ * URL or other non-slug value being set by mistake — fall back to the default.
  */
-function sanitizeDepartment(raw: string | undefined): string {
+function sanitizeDepartment(raw: string | undefined, fallback: string): string {
   const t = (raw ?? "").trim()
-  return t && !/[:/\s]/.test(t) ? t : "roboready"
+  return t && !/[:/\s]/.test(t) ? t : fallback
 }
+
+/**
+ * RoboSearch — the autonomous-world intelligence engine — is a distinct StaffGPT
+ * department (orchestrator RoboScout + research/curation specialists), separate
+ * from the "roboready" assessment/sales/proposal workforce. These job types are
+ * RoboSearch's live search + research/curation family and route there; every
+ * other job stays on the default (roboready) department. Adding a new RoboSearch
+ * job (discover/research/verify/etc.) here routes it to the engine automatically.
+ */
+const ROBOSEARCH_JOB_TYPES = new Set<string>([
+  "network-search",
+  "discover-entity",
+  "research-entity",
+  "extract-entity",
+  "verify-entity",
+  "resolve-duplicate",
+  "update-entity",
+  "locate-entity",
+  "analyze-property",
+  "analyze-search",
+])
 
 /**
  * Talks to the real StaffGPT external API (v1).
@@ -69,16 +90,29 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
 
   private readonly apiRoot: string
   private readonly department: string
+  private readonly robosearchDepartment: string
   private readonly local = new LocalOrchestrator()
-  private employeeCache: StaffGptEmployee[] | null = null
+  private readonly employeeCache = new Map<string, StaffGptEmployee[]>()
 
   constructor(
     baseUrl: string,
     private readonly apiKey: string,
     department: string = "roboready",
+    robosearchDepartment: string = "robosearch",
   ) {
     this.apiRoot = normalizeApiRoot(baseUrl)
-    this.department = sanitizeDepartment(department)
+    this.department = sanitizeDepartment(department, "roboready")
+    this.robosearchDepartment = sanitizeDepartment(robosearchDepartment, "robosearch")
+  }
+
+  /**
+   * Routes a job to the right StaffGPT department: RoboSearch's intelligence
+   * jobs (live search, discovery, research, curation) run in the `robosearch`
+   * department; everything else (assessments, sales, proposals) runs in the
+   * default `roboready` department.
+   */
+  private departmentFor(jobType: string): string {
+    return ROBOSEARCH_JOB_TYPES.has(jobType) ? this.robosearchDepartment : this.department
   }
 
   async dispatch<TInput, TOutput>(req: DispatchRequest<TInput>): Promise<DispatchResult<TOutput>> {
@@ -102,12 +136,13 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
     const job = getJob(req.jobType)
     if (!job) throw new Error(`Unknown jobType: ${req.jobType}`)
 
-    const staffEmployee = await this.resolveEmployee(req.employeeSlug, employee.name)
+    const department = this.departmentFor(req.jobType)
+    const staffEmployee = await this.resolveEmployee(department, req.employeeSlug, employee.name)
     const instructions = buildJobSystem(employee, job)
     const outputSchema = zodToJsonSchema(job.schema, { $refStrategy: "none" })
 
     const body = {
-      department: this.department,
+      department,
       employee: staffEmployee,
       jobType: req.jobType,
       instructions,
@@ -119,7 +154,7 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
 
     // Employment gate: employ this worker once, then retry the dispatch.
     if (res.status === 403 && (await this.isNotEmployed(res))) {
-      await this.employ(staffEmployee)
+      await this.employ(department, staffEmployee)
       res = await this.api("POST", "/dispatch", body)
     }
 
@@ -157,11 +192,11 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
    * (→ local fallback) when the department is empty/missing, with an actionable
    * message.
    */
-  private async resolveEmployee(slug: string, name: string): Promise<string> {
-    const employees = await this.listEmployees()
+  private async resolveEmployee(department: string, slug: string, name: string): Promise<string> {
+    const employees = await this.listEmployees(department)
     if (employees.length === 0) {
       throw new Error(
-        `no employees in StaffGPT department "${this.department}" — create it at https://www.staffgpt.net/en/plugin`,
+        `no employees in StaffGPT department "${department}" — create it at https://www.staffgpt.net/en/plugin`,
       )
     }
     const match =
@@ -170,13 +205,14 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
       employees.find((e) => e.kind === "orchestrator") ??
       employees[0]
     const id = match.slug ?? match.codename ?? match.name
-    if (!id) throw new Error(`StaffGPT department "${this.department}" employee has no usable identifier`)
+    if (!id) throw new Error(`StaffGPT department "${department}" employee has no usable identifier`)
     return id
   }
 
-  private async listEmployees(): Promise<StaffGptEmployee[]> {
-    if (this.employeeCache) return this.employeeCache
-    const res = await this.api("GET", `/employees?department=${encodeURIComponent(this.department)}`)
+  private async listEmployees(department: string): Promise<StaffGptEmployee[]> {
+    const cached = this.employeeCache.get(department)
+    if (cached) return cached
+    const res = await this.api("GET", `/employees?department=${encodeURIComponent(department)}`)
     if (!res.ok) {
       const detail = await this.readError(res)
       throw new Error(`employees lookup ${res.status}${detail ? `: ${detail}` : ""}`)
@@ -187,12 +223,13 @@ export class StaffGPTApiAdapter implements StaffGPTAdapter {
       : ((json as { employees?: unknown; data?: unknown })?.employees ??
           (json as { data?: unknown })?.data ??
           [])
-    this.employeeCache = (Array.isArray(list) ? list : []) as StaffGptEmployee[]
-    return this.employeeCache
+    const employees = (Array.isArray(list) ? list : []) as StaffGptEmployee[]
+    this.employeeCache.set(department, employees)
+    return employees
   }
 
-  private async employ(employee: string): Promise<void> {
-    const res = await this.api("POST", "/employment", { department: this.department, employee })
+  private async employ(department: string, employee: string): Promise<void> {
+    const res = await this.api("POST", "/employment", { department, employee })
     // 2xx = employed; a conflict/409 means already employed, which is fine.
     if (!res.ok && res.status !== 409) {
       const detail = await this.readError(res)
