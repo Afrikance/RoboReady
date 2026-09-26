@@ -1,11 +1,19 @@
 import "server-only"
 
-import { and, count, desc, eq } from "drizzle-orm"
+import { and, count, desc, eq, inArray } from "drizzle-orm"
 
 import { db } from "@/lib/db"
-import { robosearchClaim, robosearchEdge, robosearchEntity, robosearchSource } from "@/lib/db/schema"
+import {
+  robosearchClaim,
+  robosearchEdge,
+  robosearchEntity,
+  robosearchResearchJob,
+  robosearchSource,
+} from "@/lib/db/schema"
+import type { OrgContext } from "@/lib/tenancy"
 
 import { dedupeKey, newId, slugify } from "./ids"
+import { findDuplicateCandidates, type DuplicateCandidate } from "./resolution"
 import type {
   Confidence,
   DiscoveryProposal,
@@ -234,4 +242,169 @@ export async function promoteProposal(args: {
   }
 
   return promoted
+}
+
+function duplicatePairKey(leftId: string, rightId: string): string {
+  return [leftId, rightId].sort().join(":")
+}
+
+/** Returns likely duplicate pairs, excluding pairs this organization dismissed. */
+export async function listDuplicateCandidates(ctx: OrgContext): Promise<DuplicateCandidate[]> {
+  const [entities, decisions] = await Promise.all([
+    listEntities({ limit: 500 }),
+    db
+      .select({ input: robosearchResearchJob.input })
+      .from(robosearchResearchJob)
+      .where(
+        and(
+          eq(robosearchResearchJob.organizationId, ctx.organizationId),
+          eq(robosearchResearchJob.jobKind, "RESOLVE_DUPLICATE"),
+        ),
+      )
+      .orderBy(desc(robosearchResearchJob.createdAt))
+      .limit(2000),
+  ])
+
+  const dismissed = new Set<string>()
+  for (const { input } of decisions) {
+    if (!input || typeof input !== "object") continue
+    const record = input as Record<string, unknown>
+    if (record.action !== "not_duplicate") continue
+    if (typeof record.leftEntityId !== "string" || typeof record.rightEntityId !== "string") continue
+    dismissed.add(duplicatePairKey(record.leftEntityId, record.rightEntityId))
+  }
+
+  return findDuplicateCandidates(entities, 0.76, 250).filter(
+    ({ left, right }) => !dismissed.has(duplicatePairKey(left.id, right.id)),
+  )
+}
+
+/** Merges one entity into a chosen survivor and records the review atomically. */
+export async function mergeDuplicateEntities(
+  ctx: OrgContext,
+  survivorId: string,
+  duplicateId: string,
+): Promise<void> {
+  if (!survivorId || !duplicateId || survivorId === duplicateId) {
+    throw new Error("Choose two different entities to merge.")
+  }
+
+  await db.transaction(async (tx) => {
+    const locked = await tx
+      .select()
+      .from(robosearchEntity)
+      .where(inArray(robosearchEntity.id, [survivorId, duplicateId].sort()))
+      .orderBy(robosearchEntity.id)
+      .for("update")
+    const survivor = locked.find((entity) => entity.id === survivorId)
+    const duplicate = locked.find((entity) => entity.id === duplicateId)
+    if (!survivor || !duplicate) throw new Error("One of these entities no longer exists.")
+    if (survivor.kind !== duplicate.kind) throw new Error("Only entities of the same kind can be merged.")
+    if (!(["active", "candidate"] as string[]).includes(survivor.status)) {
+      throw new Error("The selected survivor is no longer active.")
+    }
+    if (!(["active", "candidate"] as string[]).includes(duplicate.status)) {
+      throw new Error("The selected duplicate has already been resolved.")
+    }
+
+    const survivorAttributes = (survivor.attributes as Record<string, unknown>) ?? {}
+    const duplicateAttributes = (duplicate.attributes as Record<string, unknown>) ?? {}
+    const mergedAttributes = { ...duplicateAttributes, ...survivorAttributes }
+    const confidenceRank: Record<string, number> = { low: 0, medium: 1, high: 2 }
+    const verificationRank: Record<string, number> = {
+      unverified: 0,
+      business_verified: 1,
+      roboready_verified: 2,
+    }
+    const confidence =
+      (confidenceRank[duplicate.confidence] ?? 0) > (confidenceRank[survivor.confidence] ?? 0)
+        ? duplicate.confidence
+        : survivor.confidence
+    const verification =
+      (verificationRank[duplicate.verification] ?? 0) > (verificationRank[survivor.verification] ?? 0)
+        ? duplicate.verification
+        : survivor.verification
+    const now = new Date()
+
+    await tx
+      .update(robosearchEntity)
+      .set({
+        attributes: mergedAttributes,
+        summary: survivor.summary ?? duplicate.summary,
+        status: survivor.status === "active" || duplicate.status === "active" ? "active" : "candidate",
+        confidence,
+        verification,
+        updatedAt: now,
+      })
+      .where(eq(robosearchEntity.id, survivorId))
+    await tx
+      .update(robosearchClaim)
+      .set({ entityId: survivorId, updatedAt: now })
+      .where(eq(robosearchClaim.entityId, duplicateId))
+    await tx
+      .update(robosearchEdge)
+      .set({ subjectEntityId: survivorId })
+      .where(eq(robosearchEdge.subjectEntityId, duplicateId))
+    await tx
+      .update(robosearchEdge)
+      .set({ objectEntityId: survivorId })
+      .where(eq(robosearchEdge.objectEntityId, duplicateId))
+    await tx
+      .update(robosearchEntity)
+      .set({ status: "merged", mergedIntoId: survivorId, updatedAt: now })
+      .where(eq(robosearchEntity.id, duplicateId))
+    await tx.insert(robosearchResearchJob).values({
+      id: newId(),
+      organizationId: ctx.organizationId,
+      jobKind: "RESOLVE_DUPLICATE",
+      status: "approved",
+      input: { action: "merge", survivorId, duplicateId },
+      summary: `Merged ${duplicate.canonicalName} into ${survivor.canonicalName}.`,
+      promotedEntityCount: 1,
+      createdByUserId: ctx.user.id,
+      reviewedByUserId: ctx.user.id,
+      reviewedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+  })
+}
+
+/** Records a human decision that a suggested pair represents distinct entities. */
+export async function dismissDuplicatePair(
+  ctx: OrgContext,
+  leftId: string,
+  rightId: string,
+): Promise<void> {
+  if (!leftId || !rightId || leftId === rightId) throw new Error("Choose two different entities.")
+  await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(robosearchEntity)
+      .where(inArray(robosearchEntity.id, [leftId, rightId].sort()))
+      .orderBy(robosearchEntity.id)
+      .for("update")
+    const left = rows.find((entity) => entity.id === leftId)
+    const right = rows.find((entity) => entity.id === rightId)
+    if (!left || !right) throw new Error("One of these entities no longer exists.")
+    if (left.kind !== right.kind) throw new Error("Only entities of the same kind can be compared.")
+    if (!["active", "candidate"].includes(left.status) || !["active", "candidate"].includes(right.status)) {
+      throw new Error("This pair has already been resolved.")
+    }
+
+    const now = new Date()
+    await tx.insert(robosearchResearchJob).values({
+      id: newId(),
+      organizationId: ctx.organizationId,
+      jobKind: "RESOLVE_DUPLICATE",
+      status: "rejected",
+      input: { action: "not_duplicate", leftEntityId: leftId, rightEntityId: rightId },
+      summary: `Kept ${left.canonicalName} and ${right.canonicalName} as distinct entities.`,
+      createdByUserId: ctx.user.id,
+      reviewedByUserId: ctx.user.id,
+      reviewedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    })
+  })
 }

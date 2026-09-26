@@ -2,6 +2,10 @@
 
 import { revalidatePath } from "next/cache"
 
+import {
+  dismissDuplicatePair,
+  mergeDuplicateEntities,
+} from "@/lib/robosearch/core"
 import { getOrgContext } from "@/lib/tenancy"
 import { isAdminRole } from "@/lib/access"
 import {
@@ -80,6 +84,58 @@ export async function rejectDiscovery(jobId: string): Promise<RobosearchActionRe
     const job = await rejectResearchJob(ctx, jobId)
     revalidatePath("/dashboard/robosearch")
     return { ok: true, job }
+  } catch (err) {
+    return { ok: false, reason: "error", message: (err as Error).message }
+  }
+}
+
+export type DuplicateReviewResult =
+  | { ok: true }
+  | { ok: false; reason: "signin" | "forbidden" | "invalid" | "error"; message: string }
+
+async function authorizeDuplicateReview(): Promise<
+  | { ok: true; ctx: NonNullable<Awaited<ReturnType<typeof getOrgContext>>> }
+  | { ok: false; result: DuplicateReviewResult }
+> {
+  const ctx = await getOrgContext()
+  if (!ctx) return { ok: false, result: { ok: false, reason: "signin", message: "Sign in to review duplicates." } }
+  if (!isAdminRole(ctx.role)) {
+    return { ok: false, result: { ok: false, reason: "forbidden", message: "Only admins can resolve duplicates." } }
+  }
+  return { ok: true, ctx }
+}
+
+export async function mergeDuplicateAction(
+  survivorId: string,
+  duplicateId: string,
+): Promise<DuplicateReviewResult> {
+  const auth = await authorizeDuplicateReview()
+  if (!auth.ok) return auth.result
+  if (!survivorId?.trim() || !duplicateId?.trim() || survivorId === duplicateId) {
+    return { ok: false, reason: "invalid", message: "Choose two different entities to merge." }
+  }
+  try {
+    await mergeDuplicateEntities(auth.ctx, survivorId.trim(), duplicateId.trim())
+    revalidatePath("/dashboard/robosearch")
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, reason: "error", message: (err as Error).message }
+  }
+}
+
+export async function dismissDuplicateAction(
+  leftId: string,
+  rightId: string,
+): Promise<DuplicateReviewResult> {
+  const auth = await authorizeDuplicateReview()
+  if (!auth.ok) return auth.result
+  if (!leftId?.trim() || !rightId?.trim() || leftId === rightId) {
+    return { ok: false, reason: "invalid", message: "Choose two different entities." }
+  }
+  try {
+    await dismissDuplicatePair(auth.ctx, leftId.trim(), rightId.trim())
+    revalidatePath("/dashboard/robosearch")
+    return { ok: true }
   } catch (err) {
     return { ok: false, reason: "error", message: (err as Error).message }
   }

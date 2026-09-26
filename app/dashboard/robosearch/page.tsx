@@ -2,7 +2,7 @@ import { redirect } from "next/navigation"
 
 import { getOrgContext } from "@/lib/tenancy"
 import { isAdminRole } from "@/lib/access"
-import { graphCounts } from "@/lib/robosearch/core"
+import { graphCounts, listDuplicateCandidates } from "@/lib/robosearch/core"
 import { listResearchJobs } from "@/lib/robosearch/research"
 import { RobosearchConsole } from "@/components/robosearch/robosearch-console"
 
@@ -13,7 +13,11 @@ export default async function RobosearchPage() {
   if (!ctx) redirect("/sign-in?next=/dashboard/robosearch")
   if (!isAdminRole(ctx.role)) redirect("/dashboard")
 
-  const [counts, jobs] = await Promise.all([graphCounts(), listResearchJobs(ctx)])
+  const [counts, jobs, duplicateCandidates] = await Promise.all([
+    graphCounts(),
+    listResearchJobs(ctx),
+    listDuplicateCandidates(ctx),
+  ])
 
   return (
     <div className="space-y-6">
@@ -28,7 +32,11 @@ export default async function RobosearchPage() {
         </p>
       </div>
 
-      <RobosearchConsole counts={counts} initialJobs={jobs} />
+      <RobosearchConsole
+        counts={counts}
+        initialJobs={jobs}
+        initialDuplicateCandidates={duplicateCandidates}
+      />
     </div>
   )
 }

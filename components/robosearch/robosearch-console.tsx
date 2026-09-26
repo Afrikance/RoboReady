@@ -25,11 +25,19 @@ import {
   type GraphCounts,
   type ResearchJobView,
 } from "@/lib/robosearch/types"
-import { startDiscovery, approveDiscovery, rejectDiscovery } from "@/app/actions/robosearch"
+import type { DuplicateCandidate } from "@/lib/robosearch/resolution"
+import {
+  dismissDuplicateAction,
+  mergeDuplicateAction,
+  startDiscovery,
+  approveDiscovery,
+  rejectDiscovery,
+} from "@/app/actions/robosearch"
 
 type Props = {
   counts: GraphCounts
   initialJobs: ResearchJobView[]
+  initialDuplicateCandidates: DuplicateCandidate[]
 }
 
 const CONFIDENCE_TONE: Record<string, string> = {
@@ -47,8 +55,9 @@ const STATUS_TONE: Record<string, string> = {
   queued: "bg-muted text-muted-foreground",
 }
 
-export function RobosearchConsole({ counts, initialJobs }: Props) {
+export function RobosearchConsole({ counts, initialJobs, initialDuplicateCandidates }: Props) {
   const [jobs, setJobs] = useState<ResearchJobView[]>(initialJobs)
+  const [duplicateCandidates, setDuplicateCandidates] = useState(initialDuplicateCandidates)
   const [market, setMarket] = useState("")
   const [entityKind, setEntityKind] = useState<EntityKind>("company")
   const [count, setCount] = useState(6)
@@ -83,6 +92,22 @@ export function RobosearchConsole({ counts, initialJobs }: Props) {
   return (
     <div className="flex flex-col gap-8">
       <MetricRow counts={counts} />
+
+      <DuplicateReview
+        candidates={duplicateCandidates}
+        onResolved={(leftId, rightId, mergedId) =>
+          setDuplicateCandidates((current) =>
+            current.filter(
+              ({ left, right }) =>
+                !(
+                  (left.id === leftId && right.id === rightId) ||
+                  (left.id === rightId && right.id === leftId) ||
+                  (mergedId && (left.id === mergedId || right.id === mergedId))
+                ),
+            ),
+          )
+        }
+      />
 
       <Card className="p-6">
         <div className="mb-4 flex items-center gap-2">
@@ -321,6 +346,121 @@ function JobCard({
           ) : null}
         </div>
       ) : null}
+    </Card>
+  )
+}
+
+function DuplicateReview({
+  candidates,
+  onResolved,
+}: {
+  candidates: DuplicateCandidate[]
+  onResolved: (leftId: string, rightId: string, mergedId?: string) => void
+}) {
+  return (
+    <section className="flex flex-col gap-4" aria-labelledby="duplicate-review-heading">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-widest text-primary">Entity resolution</p>
+          <h2 id="duplicate-review-heading" className="mt-1 text-lg font-semibold">
+            Possible duplicates
+          </h2>
+        </div>
+        <Badge variant="secondary">{candidates.length} to review</Badge>
+      </div>
+      <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground">
+        Similar names are suggestions, not automatic merges. Choose the canonical record to keep, or
+        mark the pair as distinct. Merging preserves claims and redirects relationship edges.
+      </p>
+      {candidates.length === 0 ? (
+        <Card className="p-6 text-sm text-muted-foreground">
+          No likely duplicate pairs need review.
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {candidates.map((candidate) => (
+            <DuplicateCandidateCard
+              key={`${candidate.left.id}:${candidate.right.id}`}
+              candidate={candidate}
+              onResolved={onResolved}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function DuplicateCandidateCard({
+  candidate,
+  onResolved,
+}: {
+  candidate: DuplicateCandidate
+  onResolved: (leftId: string, rightId: string, mergedId?: string) => void
+}) {
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+  const { left, right } = candidate
+
+  function resolve(action: "left" | "right" | "distinct") {
+    setError(null)
+    startTransition(async () => {
+      const result =
+        action === "distinct"
+          ? await dismissDuplicateAction(left.id, right.id)
+          : await mergeDuplicateAction(
+              action === "left" ? left.id : right.id,
+              action === "left" ? right.id : left.id,
+            )
+      if (result.ok) {
+        onResolved(
+          left.id,
+          right.id,
+          action === "distinct" ? undefined : action === "left" ? right.id : left.id,
+        )
+      } else {
+        setError(result.message)
+      }
+    })
+  }
+
+  return (
+    <Card className="flex flex-col gap-4 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="outline">{ENTITY_KIND_LABELS[left.kind]}</Badge>
+        <Badge variant="secondary">Match score {candidate.score}%</Badge>
+        <span className="text-xs text-muted-foreground">{candidate.reason}</span>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2">
+        {[left, right].map((entity) => (
+          <div key={entity.id} className="flex flex-col gap-1 rounded-md border border-border p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-medium">{entity.canonicalName}</span>
+              <Badge variant="outline">{entity.status}</Badge>
+            </div>
+            {entity.summary ? (
+              <p className="text-sm leading-relaxed text-muted-foreground">{entity.summary}</p>
+            ) : null}
+            <p className="text-xs text-muted-foreground">
+              {entity.verification.replaceAll("_", " ")} · {entity.confidence} confidence
+            </p>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={() => resolve("left")} disabled={pending}>
+          {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <CheckCircle2 className="size-4" aria-hidden />}
+          Merge into {left.canonicalName}
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => resolve("right")} disabled={pending}>
+          Merge into {right.canonicalName}
+        </Button>
+        <Button size="sm" variant="ghost" onClick={() => resolve("distinct")} disabled={pending}>
+          <XCircle className="size-4" aria-hidden />
+          Not duplicates
+        </Button>
+      </div>
+      {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
     </Card>
   )
 }
