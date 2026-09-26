@@ -1,6 +1,6 @@
 import "server-only"
 
-import { and, count, desc, eq } from "drizzle-orm"
+import { and, count, desc, eq, ne } from "drizzle-orm"
 
 import { db } from "@/lib/db"
 import { robosearchResearchJob } from "@/lib/db/schema"
@@ -94,7 +94,12 @@ export async function listResearchJobs(ctx: OrgContext, limit = 50): Promise<Res
   const rows = await db
     .select()
     .from(robosearchResearchJob)
-    .where(eq(robosearchResearchJob.organizationId, ctx.organizationId))
+    .where(
+      and(
+        eq(robosearchResearchJob.organizationId, ctx.organizationId),
+        ne(robosearchResearchJob.jobKind, "RESOLVE_DUPLICATE"),
+      ),
+    )
     .orderBy(desc(robosearchResearchJob.createdAt))
     .limit(Math.min(limit, 200))
   return rows.map(toJobView)

@@ -316,7 +316,7 @@ This is how you prevent a future rewrite.
 
 ---
 
-## 15. StaffGPT ↔ RoboSearch
+## 15. StaffGPT ↔ RoboSearch 
 
 Establish a formal interface. StaffGPT sends jobs: `DISCOVER_ENTITY,
 RESEARCH_ENTITY, UPDATE_ENTITY, VERIFY_ENTITY, RESOLVE_DUPLICATE,
