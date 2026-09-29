@@ -30,6 +30,7 @@ const ADMIN_ONLY_NAV_HREFS = new Set([
   "/dashboard/verification",
   "/dashboard/support",
   "/dashboard/robosearch",
+  "/dashboard/blog",
 ])
 
 /**

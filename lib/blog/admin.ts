@@ -1,5 +1,6 @@
 import "server-only"
 
+import { timingSafeEqual } from "node:crypto"
 import { redirect } from "next/navigation"
 import { getOrgContext, PLATFORM_ORG_ID } from "@/lib/tenancy"
 import { isAdminRole } from "@/lib/access"
@@ -36,11 +37,9 @@ export function safeMediaPathname(value: string) {
 }
 
 export function safeTokenEqual(candidate: string, expected: string) {
-  const encoder = new TextEncoder()
-  const a = encoder.encode(candidate)
-  const b = encoder.encode(expected)
-  if (a.byteLength !== b.byteLength) return false
-  return crypto.subtle.timingSafeEqual ? crypto.subtle.timingSafeEqual(a, b) : a.every((value, index) => value === b[index])
+  const a = Buffer.from(candidate)
+  const b = Buffer.from(expected)
+  return a.byteLength === b.byteLength && timingSafeEqual(a, b)
 }
 
 export const BLOG_PUBLIC_BASE_URL = "https://roboready.net"

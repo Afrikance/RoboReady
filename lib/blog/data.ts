@@ -21,11 +21,11 @@ function mapPost(row: PostRow, media: BlogMediaItem[] = [], now = new Date()): B
     category: row.category as BlogPost["category"],
     tags: Array.isArray(row.tags) ? row.tags.filter((tag): tag is string => typeof tag === "string") : [],
     authorName: row.authorName,
-    authorRole: row.authorRole,
+    authorRole: row.authorRole ?? "",
     sources: Array.isArray(row.sources) ? (row.sources as BlogSource[]) : [],
-    seoTitle: row.seoTitle,
-    seoDescription: row.seoDescription,
-    canonicalUrl: row.canonicalUrl,
+    seoTitle: row.seoTitle ?? "",
+    seoDescription: row.seoDescription ?? "",
+    canonicalUrl: row.canonicalUrl ?? "",
     status: isScheduledAndLive ? "published" : row.status as BlogPost["status"],
     scheduledAt: row.scheduledAt?.toISOString() ?? null,
     createdAt: row.createdAt,
@@ -46,11 +46,11 @@ async function loadMedia(postIds: string[]) {
       postId: row.postId,
       url: row.url,
       pathname: row.pathname ?? "",
-      contentType: row.contentType,
+      contentType: row.contentType as BlogMediaItem["contentType"],
       mediaType: row.mediaType as BlogMediaItem["mediaType"],
       altText: row.altText,
-      caption: row.caption,
-      transcript: row.transcript,
+      caption: row.caption ?? "",
+      transcript: row.transcript ?? "",
       sortOrder: row.sortOrder,
     })
     grouped.set(row.postId, items)
@@ -85,7 +85,7 @@ function publicPostFilter(now: Date) {
   return or(
     eq(blogPost.status, "published"),
     and(eq(blogPost.status, "scheduled"), lte(blogPost.scheduledAt, now)),
-  )
+  )!
 }
 
 function postFilters(options: { admin?: boolean; category?: string }, now: Date) {
@@ -253,7 +253,7 @@ export async function saveStaffGptPost(input: StaffGptArticleInput["article"], i
 
 export async function getPublishedBlogSlugs() {
   const now = new Date()
-  return db.select({ slug: blogPost.slug, updatedAt: blogPost.updatedAt }).from(blogPost)
+  return db.select({ slug: blogPost.slug, canonicalUrl: blogPost.canonicalUrl, updatedAt: blogPost.updatedAt }).from(blogPost)
     .where(publicPostFilter(now))
     .orderBy(desc(blogPost.updatedAt))
 }
@@ -295,6 +295,11 @@ export async function deleteBlogPost(id: string) {
 
 export async function getBlogPostMediaIds(postId: string) {
   return db.select({ id: blogMedia.id, url: blogMedia.url, pathname: blogMedia.pathname }).from(blogMedia).where(eq(blogMedia.postId, postId))
+}
+
+export async function getBlogMediaById(id: string) {
+  const [row] = await db.select().from(blogMedia).where(eq(blogMedia.id, id)).limit(1)
+  return row ?? null
 }
 
 export async function getPublishedBlogSummary() {
@@ -359,24 +364,40 @@ export async function getBlogPostCountByStatus(status: BlogPost["status"]) {
   return row?.total ?? 0
 }
 
-export async function listBlogGalleryMedia() {
+async function queryBlogGalleryMedia(publicOnly: boolean) {
   const now = new Date()
-  const posts = await db.select({ id: blogPost.id }).from(blogPost).where(publicPostFilter(now))
-  if (!posts.length) return []
-  const postIds = posts.map((post) => post.id)
-  const rows = await db.select().from(blogMedia).where(inArray(blogMedia.postId, postIds)).orderBy(blogMedia.sortOrder, blogMedia.createdAt)
+  const query = db.select({
+    id: blogMedia.id,
+    postId: blogMedia.postId,
+    url: blogMedia.url,
+    pathname: blogMedia.pathname,
+    contentType: blogMedia.contentType,
+    mediaType: blogMedia.mediaType,
+    altText: blogMedia.altText,
+    caption: blogMedia.caption,
+    transcript: blogMedia.transcript,
+    sortOrder: blogMedia.sortOrder,
+    postSlug: blogPost.slug,
+    postTitle: blogPost.title,
+    postStatus: blogPost.status,
+  }).from(blogMedia).innerJoin(blogPost, eq(blogPost.id, blogMedia.postId))
+  const rows = await query.where(publicOnly ? publicPostFilter(now) : undefined).orderBy(desc(blogMedia.createdAt))
   return rows.map((row) => ({
-    id: row.id,
-    postId: row.postId,
-    url: row.url,
+    ...row,
     pathname: row.pathname ?? "",
-    contentType: row.contentType,
+    contentType: row.contentType as BlogMediaItem["contentType"],
     mediaType: row.mediaType as BlogMediaItem["mediaType"],
-    altText: row.altText,
-    caption: row.caption,
-    transcript: row.transcript,
-    sortOrder: row.sortOrder,
+    caption: row.caption ?? "",
+    transcript: row.transcript ?? "",
   }))
+}
+
+export async function listBlogGalleryMedia() {
+  return queryBlogGalleryMedia(true)
+}
+
+export async function listBlogGalleryMediaForAdmin() {
+  return queryBlogGalleryMedia(false)
 }
 
 export async function hasBlogPosts() {

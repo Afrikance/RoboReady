@@ -1,5 +1,7 @@
 import Link from "next/link"
+import { connection } from "next/server"
 import { Logo } from "@/components/brand/logo"
+import { getBlogSettings } from "@/lib/blog/data"
 
 type FooterLink = { label: string; href: string }
 
@@ -11,6 +13,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: "Pricing", href: "/#pricing" },
       { label: "How it works", href: "/how-it-works" },
       { label: "Properties Network", href: "/network" },
+      { label: "RoboArrival Blog", href: "/blog" },
     ],
   },
   {
@@ -31,7 +34,9 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
   },
 ]
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  await connection()
+  const blogVisible = (await getBlogSettings()).visible
   return (
     <footer className="border-t bg-secondary/30">
       <div className="mx-auto max-w-6xl px-6 py-12">
@@ -46,7 +51,7 @@ export function SiteFooter() {
             <div key={col.title} className="flex flex-col gap-3">
               <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{col.title}</h3>
               <ul className="flex flex-col gap-2">
-                {col.links.map((link) => (
+                {col.links.filter((link) => link.href !== "/blog" || blogVisible).map((link) => (
                   <li key={link.label}>
                     <Link
                       href={link.href}

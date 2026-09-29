@@ -37,6 +37,15 @@ export const mediaSchema = z.object({
   sortOrder: z.number().int().min(0).max(30).default(0),
 }).superRefine((media, context) => {
   if (!media.pathname.startsWith("blog/")) context.addIssue({ code: "custom", path: ["pathname"], message: "Media must use the blog upload path." })
+  try {
+    const url = new URL(media.url)
+    const allowedBlobHost = url.hostname.endsWith(".public.blob.vercel-storage.com") || url.hostname.endsWith(".blob.vercel-storage.com")
+    if (!allowedBlobHost || decodeURIComponent(url.pathname.slice(1)) !== media.pathname) {
+      context.addIssue({ code: "custom", path: ["url"], message: "Media must match its public blog Blob path." })
+    }
+  } catch {
+    context.addIssue({ code: "custom", path: ["url"], message: "Use a valid public blog media URL." })
+  }
   if ((media.mediaType === "image") !== media.contentType.startsWith("image/")) {
     context.addIssue({ code: "custom", path: ["mediaType"], message: "Media type and content type must match." })
   }
@@ -126,6 +135,7 @@ export function isBlogPostPublic(status: string, scheduledAt: Date | null, publi
 }
 
 export type BlogMediaInput = z.infer<typeof mediaSchema>
+export type BlogSource = z.infer<typeof sourceSchema>
 export type BlogArticleInput = z.infer<typeof blogArticleSchema>
 export type StaffGptArticleInput = z.infer<typeof staffGptArticleSchema>
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number]
