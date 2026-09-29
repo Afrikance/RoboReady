@@ -1,57 +1,21 @@
-import { z } from "zod"
+import type { BlogArticleInput, BlogCategory, BlogMediaInput, BlogStatus, BlogSource as ValidatedBlogSource } from "@/lib/blog/validation"
 
-export const BLOG_CATEGORIES = [
-  "field-notes",
-  "robotics",
-  "autonomous-vehicles",
-  "property-infrastructure",
-  "industry",
-] as const
-
-export const blogPostInputSchema = z.object({
-  title: z.string().trim().min(4).max(160),
-  slug: z.string().trim().min(3).max(180).regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-  excerpt: z.string().trim().min(20).max(320),
-  body: z.string().trim().min(80).max(60_000),
-  category: z.enum(BLOG_CATEGORIES),
-  tags: z.array(z.string().trim().min(1).max(40)).max(12),
-  authorName: z.string().trim().min(2).max(80),
-  authorRole: z.string().trim().max(120).optional().nullable(),
-  sources: z.array(z.object({ title: z.string().trim().min(1).max(180), url: z.string().url().max(2048) })).max(20),
-  seoTitle: z.string().trim().max(70).optional().nullable(),
-  seoDescription: z.string().trim().max(180).optional().nullable(),
-  canonicalUrl: z.string().url().max(2048).optional().nullable(),
-  status: z.enum(["draft", "scheduled", "published", "archived"]),
-  scheduledAt: z.string().datetime().optional().nullable(),
-})
-
-export const staffGptBlogInputSchema = blogPostInputSchema.omit({ status: true, scheduledAt: true }).extend({
-  idempotencyKey: z.string().trim().min(8).max(200),
-})
-
-export type BlogPostInput = z.infer<typeof blogPostInputSchema>
-export type BlogPostStatus = BlogPostInput["status"]
-export type BlogSource = z.infer<typeof blogPostInputSchema>["sources"][number]
+export type BlogPostInput = BlogArticleInput
+export type BlogPostStatus = BlogStatus
+export type BlogCategoryType = BlogCategory
+export type BlogSource = ValidatedBlogSource
+export type BlogMediaInputType = BlogMediaInput
 export type BlogSettings = {
   visible: boolean
   staffgptAutoPublish: boolean
 }
-export type BlogMediaItem = {
+export type BlogMediaItem = BlogMediaInput & {
   id: string
   postId: string
-  url: string
-  pathname: string | null
-  contentType: string
-  mediaType: "image" | "video"
-  altText: string
-  caption: string | null
-  transcript: string | null
-  sortOrder: number
 }
-export type BlogPost = BlogPostInput & {
+export type BlogPost = Omit<BlogArticleInput, "scheduledAt" | "media"> & {
   id: string
-  tags: string[]
-  sources: BlogSource[]
+  scheduledAt: string | null
   createdAt: Date
   updatedAt: Date
   publishedAt: Date | null
@@ -71,7 +35,7 @@ export function slugifyTitle(value: string) {
 export function safeExternalUrl(value: string): string | null {
   try {
     const url = new URL(value)
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null
+    if (url.protocol !== "https:") return null
     return url.toString()
   } catch {
     return null
