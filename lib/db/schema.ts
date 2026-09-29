@@ -1,11 +1,14 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -137,6 +140,8 @@ export const blogPost = pgTable(
   (table) => ({
     statusPublished: index("blog_post_status_published_idx").on(table.status, table.publishedAt),
     categoryStatus: index("blog_post_category_status_idx").on(table.category, table.status),
+    validStatus: check("blog_post_status_check", sql`${table.status} IN ('draft', 'scheduled', 'published', 'archived')`),
+    validSource: check("blog_post_source_check", sql`${table.creationSource} IN ('manual', 'staffgpt')`),
   }),
 )
 
@@ -157,16 +162,23 @@ export const blogMedia = pgTable(
   },
   (table) => ({
     postSort: index("blog_media_post_sort_idx").on(table.postId, table.sortOrder),
+    validType: check("blog_media_type_check", sql`${table.mediaType} IN ('image', 'video')`),
   }),
 )
 
-export const blogSettings = pgTable("blog_settings", {
-  id: text("id").primaryKey().default("global"),
-  visible: boolean("visible").notNull().default(false),
-  staffgptAutoPublish: boolean("staffgptAutoPublish").notNull().default(false),
-  updatedByUserId: text("updatedByUserId"),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-})
+export const blogSettings = pgTable(
+  "blog_settings",
+  {
+    id: text("id").primaryKey().default("global"),
+    visible: boolean("visible").notNull().default(false),
+    staffgptAutoPublish: boolean("staffgptAutoPublish").notNull().default(false),
+    updatedByUserId: text("updatedByUserId"),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    singleton: check("blog_settings_singleton_check", sql`${table.id} = 'global'`),
+  }),
+)
 
 export const blogApiRateBucket = pgTable(
   "blog_api_rate_bucket",
@@ -176,7 +188,7 @@ export const blogApiRateBucket = pgTable(
     requestCount: integer("requestCount").notNull().default(0),
   },
   (table) => ({
-    primary: unique().on(table.rateKey, table.bucketStart),
+    primary: primaryKey({ columns: [table.rateKey, table.bucketStart] }),
     bucketStart: index("blog_api_rate_bucket_start_idx").on(table.bucketStart),
   }),
 )
