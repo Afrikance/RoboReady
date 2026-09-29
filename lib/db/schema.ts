@@ -1,10 +1,14 @@
+import { sql } from "drizzle-orm"
 import {
   boolean,
+  check,
   doublePrecision,
+  index,
   integer,
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -106,6 +110,89 @@ export const auditLog = pgTable("audit_log", {
   ipAddress: text("ipAddress"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
 })
+
+export const blogPost = pgTable(
+  "blog_post",
+  {
+    id: text("id").primaryKey(),
+    title: text("title").notNull(),
+    slug: text("slug").notNull().unique(),
+    excerpt: text("excerpt").notNull(),
+    body: text("body").notNull(),
+    category: text("category").notNull().default("field-notes"),
+    tags: jsonb("tags").$type<string[]>().notNull().default([]),
+    authorName: text("authorName").notNull(),
+    authorRole: text("authorRole"),
+    sources: jsonb("sources").$type<{ label: string; url: string; publishedAt?: string }[]>().notNull().default([]),
+    seoTitle: text("seoTitle"),
+    seoDescription: text("seoDescription"),
+    canonicalUrl: text("canonicalUrl"),
+    status: text("status").notNull().default("draft"),
+    creationSource: text("creationSource").notNull().default("manual"),
+    externalIdempotencyKey: text("externalIdempotencyKey").unique(),
+    scheduledAt: timestamp("scheduledAt"),
+    publishedAt: timestamp("publishedAt"),
+    createdByUserId: text("createdByUserId"),
+    updatedByUserId: text("updatedByUserId"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    statusPublished: index("blog_post_status_published_idx").on(table.status, table.publishedAt),
+    categoryStatus: index("blog_post_category_status_idx").on(table.category, table.status),
+    validStatus: check("blog_post_status_check", sql`${table.status} IN ('draft', 'scheduled', 'published', 'archived')`),
+    validSource: check("blog_post_source_check", sql`${table.creationSource} IN ('manual', 'staffgpt')`),
+  }),
+)
+
+export const blogMedia = pgTable(
+  "blog_media",
+  {
+    id: text("id").primaryKey(),
+    postId: text("postId").notNull().references(() => blogPost.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    pathname: text("pathname"),
+    contentType: text("contentType").notNull(),
+    mediaType: text("mediaType").notNull(),
+    altText: text("altText").notNull().default(""),
+    caption: text("caption"),
+    transcript: text("transcript"),
+    sortOrder: integer("sortOrder").notNull().default(0),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    postSort: index("blog_media_post_sort_idx").on(table.postId, table.sortOrder),
+    validType: check("blog_media_type_check", sql`${table.mediaType} IN ('image', 'video')`),
+  }),
+)
+
+export const blogSettings = pgTable(
+  "blog_settings",
+  {
+    id: text("id").primaryKey().default("global"),
+    visible: boolean("visible").notNull().default(false),
+    staffgptAutoPublish: boolean("staffgptAutoPublish").notNull().default(false),
+    updatedByUserId: text("updatedByUserId"),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    singleton: check("blog_settings_singleton_check", sql`${table.id} = 'global'`),
+  }),
+)
+
+export const blogApiRateBucket = pgTable(
+  "blog_api_rate_bucket",
+  {
+    rateKey: text("rateKey").notNull(),
+    bucketStart: timestamp("bucketStart").notNull(),
+    requestCount: integer("requestCount").notNull().default(0),
+  },
+  (table) => ({
+    primary: primaryKey({ columns: [table.rateKey, table.bucketStart] }),
+    bucketStart: index("blog_api_rate_bucket_start_idx").on(table.bucketStart),
+  }),
+)
+
 
 // ---------------------------------------------------------------------------
 // RoboReady domain
