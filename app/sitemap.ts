@@ -12,6 +12,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const publicPages: MetadataRoute.Sitemap = [
     { url: SITE_URL, changeFrequency: "weekly", priority: 1 },
     { url: `${SITE_URL}/how-it-works`, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${SITE_URL}/government`, changeFrequency: "monthly", priority: 0.8 },
     { url: `${SITE_URL}/network`, changeFrequency: "weekly", priority: 0.7 },
     { url: FEED_CANONICAL_ROOT, changeFrequency: "weekly", priority: 0.8 },
     ...FEED_ARTICLES.map((article) => ({
