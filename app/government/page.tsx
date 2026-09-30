@@ -16,8 +16,6 @@ import { Logo } from "@/components/brand/logo"
 import { Button } from "@/components/ui/button"
 import { SiteFooter } from "@/components/marketing/site-footer"
 
-const ASSESSMENT_EMAIL =
-  "mailto:hello@roboready.app?subject=Request%20a%20Government%20Readiness%20Assessment&body=Hello%20RoboReady%20and%20StaffGPT%2C%0A%0AI%27d%20like%20to%20discuss%20a%20Government%20Readiness%20Assessment.%0A%0AGovernment%20or%20agency%3A%20%0AJurisdiction%3A%20%0APrimary%20interest%3A%20"
 
 export const metadata: Metadata = {
   title: "AI Workforce & Autonomous Infrastructure for Government",
@@ -122,7 +120,7 @@ export default function GovernmentPage() {
               Capabilities
             </Link>
             <Button asChild size="sm" aria-label="Request a Government Readiness Assessment">
-              <a href={ASSESSMENT_EMAIL}>
+              <a href="/contact?request=government-assessment">
                 <span className="sm:hidden">Request</span>
                 <span className="hidden sm:inline">Request an assessment</span>
               </a>
@@ -152,7 +150,7 @@ export default function GovernmentPage() {
               </p>
               <div className="flex flex-wrap items-center gap-3 pt-1">
                 <Button asChild size="lg" variant="secondary">
-                  <a href={ASSESSMENT_EMAIL}>
+                  <a href="/contact?request=government-assessment">
                     Request a Government Readiness Assessment
                     <ArrowRight className="size-4" />
                   </a>
@@ -325,7 +323,7 @@ export default function GovernmentPage() {
               considering. We&apos;ll start with a conversation about fit and a possible scope.
             </p>
             <Button asChild size="lg">
-              <a href={ASSESSMENT_EMAIL}>
+              <a href="/contact?request=government-assessment">
                 Request an assessment
                 <ArrowRight className="size-4" />
               </a>
