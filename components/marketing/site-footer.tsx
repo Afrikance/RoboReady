@@ -14,6 +14,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: "How it works", href: "/how-it-works" },
       { label: "Properties Network", href: "/network" },
       { label: "RoboArrival Blog", href: "/blog" },
+      { label: "Field Guides & RSS", href: "/feeds" },
     ],
   },
   {
