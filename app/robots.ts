@@ -9,7 +9,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   return {
     rules: [
       { userAgent: "*", allow: "/", disallow },
-      { userAgent: "OAI-SearchBot", allow: visible ? ["/", "/blog/"] : "/", disallow: visible ? ["/dashboard/", "/api/"] : ["/dashboard/", "/api/", "/blog"] },
+      { userAgent: "OAI-SearchBot", allow: visible ? ["/", "/blog/", "/feeds/"] : ["/", "/feeds/"], disallow: visible ? ["/dashboard/", "/api/"] : ["/dashboard/", "/api/", "/blog"] },
     ],
     sitemap: "https://roboready.net/sitemap.xml",
     host: "https://roboready.net",
