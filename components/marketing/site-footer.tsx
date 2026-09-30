@@ -12,6 +12,7 @@ const COLUMNS: { title: string; links: FooterLink[] }[] = [
       { label: "Features", href: "/#features" },
       { label: "Pricing", href: "/#pricing" },
       { label: "How it works", href: "/how-it-works" },
+      { label: "Government", href: "/government" },
       { label: "Properties Network", href: "/network" },
       { label: "RoboArrival Blog", href: "/blog" },
       { label: "Field Guides & RSS", href: "/feeds" },
