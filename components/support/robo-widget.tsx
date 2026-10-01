@@ -2,11 +2,29 @@
 
 import { useEffect, useRef, useState } from "react"
 import { Bot, Send, X } from "lucide-react"
+import useSWR from "swr"
 import { cn } from "@/lib/utils"
 import { useRoboChat } from "@/components/support/use-robo-chat"
 
+type RoboSettings = { defaultOpen: boolean }
+
+async function fetchRoboSettings(url: string): Promise<RoboSettings> {
+  const response = await fetch(url, { cache: "no-store" })
+  if (!response.ok) throw new Error("Unable to load Robo settings")
+  return response.json()
+}
+
 export function RoboWidget() {
   const [open, setOpen] = useState(false)
+  const userHasToggled = useRef(false)
+  const { data: settings } = useSWR<RoboSettings>("/api/site-settings/robo", fetchRoboSettings, {
+    revalidateOnFocus: false,
+  })
+
+  useEffect(() => {
+    if (settings?.defaultOpen && !userHasToggled.current) setOpen(true)
+  }, [settings?.defaultOpen])
+
   const { messages, status, send } = useRoboChat()
   const [input, setInput] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -45,7 +63,10 @@ export function RoboWidget() {
             </div>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                userHasToggled.current = true
+                setOpen(false)
+              }}
               aria-label="Close chat"
               className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
@@ -116,7 +137,10 @@ export function RoboWidget() {
 
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          userHasToggled.current = true
+          setOpen((value) => !value)
+        }}
         aria-label={open ? "Close chat with Robo" : "Chat with Robo"}
         aria-expanded={open}
         className="flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"

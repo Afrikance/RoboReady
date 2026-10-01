@@ -180,6 +180,19 @@ export const blogSettings = pgTable(
   }),
 )
 
+export const siteSettings = pgTable(
+  "site_settings",
+  {
+    id: text("id").primaryKey().default("global"),
+    roboDefaultOpen: boolean("roboDefaultOpen").notNull().default(false),
+    updatedByUserId: text("updatedByUserId"),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    singleton: check("site_settings_singleton_check", sql`${table.id} = 'global'`),
+  }),
+)
+
 export const blogApiRateBucket = pgTable(
   "blog_api_rate_bucket",
   {
