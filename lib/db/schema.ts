@@ -180,6 +180,61 @@ export const blogSettings = pgTable(
   }),
 )
 
+export const siteSettings = pgTable(
+  "site_settings",
+  {
+    id: text("id").primaryKey().default("global"),
+    roboDefaultOpen: boolean("roboDefaultOpen").notNull().default(false),
+    partnersVisible: boolean("partnersVisible").notNull().default(true),
+    partnerMarquee: boolean("partnerMarquee").notNull().default(false),
+    updatedByUserId: text("updatedByUserId"),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    singleton: check("site_settings_singleton_check", sql`${table.id} = 'global'`),
+  }),
+)
+
+export const sitePartner = pgTable(
+  "site_partner",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    logoUrl: text("logoUrl"),
+    logoPathname: text("logoPathname"),
+    destinationUrl: text("destinationUrl"),
+    visible: boolean("visible").notNull().default(true),
+    linkActive: boolean("linkActive").notNull().default(false),
+    sortOrder: integer("sortOrder").notNull().default(0),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (table) => ({
+    sort: index("site_partner_visible_sort_idx").on(table.visible, table.sortOrder, table.name),
+    secureDestination: check(
+      "site_partner_destination_https_check",
+      sql`${table.destinationUrl} IS NULL OR ${table.destinationUrl} LIKE 'https://%'`,
+    ),
+    activeLinkHasDestination: check(
+      "site_partner_active_link_check",
+      sql`NOT ${table.linkActive} OR ${table.destinationUrl} IS NOT NULL`,
+    ),
+  }),
+)
+
+export type SitePartner = typeof sitePartner.$inferSelect
+export type NewSitePartner = typeof sitePartner.$inferInsert
+
+export type PublicSitePartner = Pick<
+  SitePartner,
+  "id" | "name" | "logoUrl" | "destinationUrl" | "linkActive" | "sortOrder"
+>
+
+export type AdminSitePartner = Pick<
+  SitePartner,
+  "id" | "name" | "logoUrl" | "destinationUrl" | "visible" | "linkActive" | "sortOrder"
+>
+
 export const blogApiRateBucket = pgTable(
   "blog_api_rate_bucket",
   {

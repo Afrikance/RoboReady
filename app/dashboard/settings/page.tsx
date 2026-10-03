@@ -11,6 +11,10 @@ import { PARTNER } from "@/lib/cyber-fleet"
 import { buttonVariants } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
+import { getRoboDefaultOpen } from "@/lib/site-settings"
+import { RoboDefaultSettings } from "@/components/support/robo-default-settings"
+import { PartnerManagement } from "@/components/partners/partner-management"
+import { getAdminSitePartners, getPartnerDisplaySettings } from "@/lib/site-partners"
 
 export const metadata = { title: "Settings" }
 
@@ -31,7 +35,14 @@ export default async function SettingsPage() {
   const canBrand = canManageTeam(ctx.role)
   const canPartner = isAdminRole(ctx.role)
   const properties = canFilled ? await listProperties() : []
-  const partnerRange = canPartner ? await getPartnerSettings() : null
+  const [partnerRange, roboDefaultOpen, sitePartners, partnerDisplaySettings] = canPartner
+    ? await Promise.all([
+        getPartnerSettings(),
+        getRoboDefaultOpen(),
+        getAdminSitePartners(),
+        getPartnerDisplaySettings(),
+      ])
+    : [null, false, [], null]
 
   return (
     <div className="space-y-6">
@@ -66,6 +77,32 @@ export default async function SettingsPage() {
             Control the partner referral offer shown to owners after an assessment. Admins and owners only.
           </p>
           <PartnerSettingsForm initial={partnerRange} />
+        </section>
+      ) : null}
+
+      {canPartner && partnerDisplaySettings ? (
+        <section className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Home-page partners</h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Manage partner logos, visibility, destination links, and the home-page display. Admins and owners only.
+          </p>
+          <PartnerManagement initialPartners={sitePartners} initialSettings={partnerDisplaySettings} />
+        </section>
+      ) : null}
+
+      {canPartner ? (
+        <section className="rounded-lg border border-border bg-card p-6">
+          <div className="flex items-center gap-2">
+            <Bot className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Robo chat</h2>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground text-pretty">
+            Set whether the support chat opens automatically for site visitors. Admins and owners only.
+          </p>
+          <RoboDefaultSettings initial={roboDefaultOpen} />
         </section>
       ) : null}
 
