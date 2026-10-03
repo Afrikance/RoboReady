@@ -15,6 +15,10 @@ import { getRoboDefaultOpen } from "@/lib/site-settings"
 import { RoboDefaultSettings } from "@/components/support/robo-default-settings"
 import { PartnerManagement } from "@/components/partners/partner-management"
 import { getAdminSitePartners, getPartnerDisplaySettings } from "@/lib/site-partners"
+import { db } from "@/lib/db"
+import { user } from "@/lib/db/schema"
+import { eq } from "drizzle-orm"
+import { ProfileSettings } from "@/components/profile-settings"
 
 export const metadata = { title: "Settings" }
 
@@ -30,6 +34,20 @@ const ROLE_LABEL: Record<string, string> = {
 
 export default async function SettingsPage() {
   const ctx = await ensureOrganization()
+  const [profile] = await db
+    .select({
+      name: user.name,
+      phone: user.phone,
+      addressLine1: user.addressLine1,
+      addressLine2: user.addressLine2,
+      city: user.city,
+      region: user.region,
+      postalCode: user.postalCode,
+      country: user.country,
+    })
+    .from(user)
+    .where(eq(user.id, ctx.user.id))
+    .limit(1)
   const canBlank = canDownloadBlankIntake(ctx.role)
   const canFilled = canDownloadFilledIntake(ctx.role)
   const canBrand = canManageTeam(ctx.role)
@@ -53,6 +71,20 @@ export default async function SettingsPage() {
           <Badge variant="secondary">{ROLE_LABEL[ctx.role] ?? ctx.role}</Badge>.
         </p>
       </div>
+
+      <ProfileSettings
+        email={ctx.user.email}
+        initial={{
+          name: profile?.name ?? ctx.user.name,
+          phone: profile?.phone ?? "",
+          addressLine1: profile?.addressLine1 ?? "",
+          addressLine2: profile?.addressLine2 ?? "",
+          city: profile?.city ?? "",
+          region: profile?.region ?? "",
+          postalCode: profile?.postalCode ?? "",
+          country: profile?.country ?? "",
+        }}
+      />
 
       {canBrand ? (
         <section className="rounded-lg border border-border bg-card p-6">
