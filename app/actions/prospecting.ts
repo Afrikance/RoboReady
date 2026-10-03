@@ -4,7 +4,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { intakeSubmission, property } from "@/lib/db/schema"
-import { assertRole, hasRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { assertRole, hasRole, isFieldRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { runJob } from "@/lib/ai/orchestrator"
 import { INTAKE_SECTIONS, type IntakeField } from "@/lib/intake/questions"
 import type { IntakePrefillOutput, ProspectPropertiesOutput } from "@/lib/ai/schemas"
@@ -416,7 +416,9 @@ export async function claimProperty(
   opts?: { takeover?: boolean },
 ): Promise<ActionResult<{ claimed: boolean }>> {
   const ctx = await requireOrgContext()
-  if (!hasRole(ctx, "member")) return { ok: false, error: "You do not have permission to claim field work." }
+  if (!isFieldRole(ctx.role) && !hasRole(ctx, "admin")) {
+    return { ok: false, error: "You do not have permission to claim field work." }
+  }
 
   const [prop] = await db
     .select({ id: property.id, status: property.status, metadata: property.metadata })
@@ -476,7 +478,9 @@ export async function claimProperty(
 /** Releases a claim back to the pool. Allowed for the claimer or any admin. */
 export async function releaseClaim(propertyId: string): Promise<ActionResult> {
   const ctx = await requireOrgContext()
-  if (!hasRole(ctx, "member")) return { ok: false, error: "You do not have permission to release field work." }
+  if (!isFieldRole(ctx.role) && !hasRole(ctx, "admin")) {
+    return { ok: false, error: "You do not have permission to release field work." }
+  }
 
   const [prop] = await db
     .select({ id: property.id, metadata: property.metadata })

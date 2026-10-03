@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto"
 import { streamText, tool, stepCountIs, type ModelMessage } from "ai"
 import { z } from "zod"
 import { getSessionUser } from "@/lib/tenancy"
 import { createInquiry } from "@/lib/support/data"
 import { roboSystemPrompt } from "@/lib/support/knowledge"
 import { INQUIRY_TOPICS, isInquiryTopic, type ChatMessage } from "@/lib/support/types"
+import { consumeRateLimit } from "@/lib/rate-limit"
 
 export const maxDuration = 30
 
@@ -26,6 +28,17 @@ function sanitizeMessages(raw: unknown): ChatMessage[] {
 }
 
 export async function POST(req: Request) {
+  const address = req.headers.get("x-real-ip")?.trim() || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown"
+  const addressKey = createHash("sha256").update(address).digest("hex").slice(0, 32)
+  if (!(await consumeRateLimit(`support:${addressKey}`, 10))) {
+    return new Response("Too many requests", { status: 429 })
+  }
+  const contentLength = Number(req.headers.get("content-length"))
+  if (!Number.isFinite(contentLength) || contentLength <= 0) {
+    return new Response("A bounded request size is required", { status: 411 })
+  }
+  if (contentLength > 256 * 1024) return new Response("Request too large", { status: 413 })
+
   let body: unknown
   try {
     body = await req.json()

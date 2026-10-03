@@ -32,7 +32,7 @@ type Run = typeof assessmentRun.$inferSelect
 /** Synthetic org context for background AI work (no session cookie available). */
 function systemCtx(organizationId: string, userId: string): OrgContext {
   return {
-    user: { id: userId, email: "system@roboready", name: "RoboReady" },
+    user: { id: userId, email: "system@roboready", name: "RoboReady", emailVerified: false },
     organizationId,
     organizationName: "RoboReady",
     role: "owner",
@@ -358,7 +358,7 @@ async function deriveNext(
   const [prop] = await db
     .select({ status: property.status })
     .from(property)
-    .where(eq(property.id, run.propertyId))
+    .where(and(eq(property.id, run.propertyId), eq(property.organizationId, run.organizationId)))
     .limit(1)
   if (prop?.status !== "assessed") return { done: false, stage: "reporting", work: () => stepFinalize(run) }
 

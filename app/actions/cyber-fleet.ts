@@ -4,7 +4,7 @@ import { and, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { assessment, cyberFleetReferral, membership, partnerSetting, property, user as userTable } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
 import { isAdminRole } from "@/lib/access"
 import { createNotification } from "@/lib/notifications"
 import { buildReferralCtaData, getPartnerSetting } from "@/lib/cyber-fleet-server"
@@ -56,6 +56,7 @@ async function notifyAdmins(
 /** Owner-facing: the referral row for one of the caller's properties (or null). */
 export async function getReferralForProperty(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const [row] = await db
     .select()
     .from(cyberFleetReferral)
@@ -68,15 +69,8 @@ export async function getReferralForProperty(propertyId: string) {
 
 /** Confirms the caller may act on a property: staff always, clients only if they own it. */
 async function assertPropertyAccess(ctx: OrgContext, propertyId: string): Promise<{ ok: boolean; ownerUserId?: string; name?: string }> {
-  const [prop] = await db
-    .select({ createdByUserId: property.createdByUserId, name: property.name })
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "read")
   if (!prop) return { ok: false }
-  if (!isAdminRole(ctx.role) && ctx.role !== "member" && prop.createdByUserId !== ctx.user.id) {
-    return { ok: false }
-  }
   return { ok: true, ownerUserId: prop.createdByUserId, name: prop.name }
 }
 
@@ -158,6 +152,7 @@ export async function dismissCyberFleetReferral(propertyId: string): Promise<Act
 /** CTA data for one property (client property view / ReadyState). */
 export async function getCyberFleetCtaData(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return { status: null, qualifies: false }
   const [assess] = await db
     .select({ score: assessment.roboReadyScore })
     .from(assessment)
@@ -313,7 +308,7 @@ export async function sendReferralReminder(id: string): Promise<ActionResult> {
   const [prop] = await db
     .select({ name: property.name })
     .from(property)
-    .where(eq(property.id, row.propertyId))
+    .where(and(eq(property.id, row.propertyId), eq(property.organizationId, ctx.organizationId)))
     .limit(1)
 
   await createNotification({

@@ -4,6 +4,7 @@ import { db } from "@/lib/db"
 import { document } from "@/lib/db/schema"
 import { requireOrgContext, recordAudit } from "@/lib/tenancy"
 import { getProperty } from "@/app/actions/properties"
+import { consumeRateLimit } from "@/lib/rate-limit"
 
 const MAX_BYTES = 25 * 1024 * 1024 // 25 MB for docs & images
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024 // 200 MB for video
@@ -50,10 +51,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
   }
 
-  const form = await request.formData()
-  const file = form.get("file") as File | null
-  const propertyId = form.get("propertyId") as string | null
-  const category = (form.get("category") as string | null) || "general"
+  if (!(await consumeRateLimit(`document-upload:${ctx.user.id}`, 6))) {
+    return NextResponse.json({ error: "Too many uploads. Please try again shortly." }, { status: 429 })
+  }
+  const contentLength = Number(request.headers.get("content-length"))
+  if (!Number.isFinite(contentLength) || contentLength <= 0) {
+    return NextResponse.json({ error: "A bounded upload size is required." }, { status: 411 })
+  }
+  if (contentLength > MAX_VIDEO_BYTES + 1024 * 1024) {
+    return NextResponse.json({ error: "Upload exceeds the maximum request size." }, { status: 413 })
+  }
+
+  let form: FormData
+  try {
+    form = await request.formData()
+  } catch {
+    return NextResponse.json({ error: "Invalid multipart upload." }, { status: 400 })
+  }
+  const fileValue = form.get("file")
+  const file = fileValue instanceof File ? fileValue : null
+  const propertyIdValue = form.get("propertyId")
+  const propertyId = typeof propertyIdValue === "string" ? propertyIdValue.trim() : ""
+  const categoryValue = form.get("category")
+  const category = (typeof categoryValue === "string" ? categoryValue : "general")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 40) || "general"
 
   if (!file || !propertyId) {
     return NextResponse.json({ error: "Missing file or property." }, { status: 400 })
@@ -62,6 +84,9 @@ export async function POST(request: NextRequest) {
   const ext = extensionOf(file.name)
   const isVideo = (file.type && file.type.startsWith("video/")) || ["mp4", "mov", "webm"].includes(ext)
   const limit = isVideo ? MAX_VIDEO_BYTES : MAX_BYTES
+  if (file.size === 0) {
+    return NextResponse.json({ error: "The uploaded file is empty." }, { status: 400 })
+  }
   if (file.size > limit) {
     const mb = Math.round(limit / (1024 * 1024))
     return NextResponse.json({ error: `File exceeds the ${mb} MB limit.` }, { status: 400 })
@@ -81,7 +106,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Property not found." }, { status: 404 })
   }
 
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120)
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "upload"
+  const displayName = safeName.slice(0, 200)
   const pathname = `orgs/${ctx.organizationId}/properties/${propertyId}/${crypto.randomUUID()}-${safeName}`
 
   try {
@@ -93,7 +119,7 @@ export async function POST(request: NextRequest) {
       organizationId: ctx.organizationId,
       propertyId,
       createdByUserId: ctx.user.id,
-      name: file.name.slice(0, 200),
+      name: displayName,
       category,
       url: blob.pathname, // store the pathname; served via /api/documents/file
       contentType: file.type || null,

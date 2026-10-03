@@ -10,20 +10,17 @@ import {
   evPlan,
   infrastructureAsset,
 } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
 import { runJob } from "@/lib/ai/orchestrator"
 import type { WayfindingOutput, AccessibilityOutput, EvPlanOutput } from "@/lib/ai/schemas"
 import { getIntake } from "@/app/actions/intake"
 import { getLatestAssessment } from "@/app/actions/assessment"
 import type { ActionResult } from "@/app/actions/properties"
+import { consumeRateLimit } from "@/lib/rate-limit"
 
 /** Loads the shared property + intake + assessment context every planner needs. */
 async function loadPropertyContext(ctx: OrgContext, propertyId: string) {
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "operations")
   if (!prop) return null
 
   const [intake, assessment] = await Promise.all([getIntake(propertyId), getLatestAssessment(propertyId)])
@@ -62,6 +59,7 @@ function guardMember(ctx: OrgContext, verb: string): { ok: false; error: string 
 
 export async function getWayfinding(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const rows = await db
     .select()
     .from(wayfindingPlan)
@@ -78,6 +76,9 @@ export async function runWayfinding(propertyId: string): Promise<ActionResult<{ 
 
   const loaded = await loadPropertyContext(ctx, propertyId)
   if (!loaded) return { ok: false, error: "Property not found." }
+  if (!(await consumeRateLimit(`wayfinding:${ctx.user.id}`, 8))) {
+    return { ok: false, error: "Planner requests are temporarily limited. Please try again shortly." }
+  }
 
   try {
     const job = await runJob<typeof loaded.context, WayfindingOutput>({
@@ -126,6 +127,7 @@ export async function runWayfinding(propertyId: string): Promise<ActionResult<{ 
 
 export async function getAccessibility(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const rows = await db
     .select()
     .from(accessibilityAudit)
@@ -144,6 +146,9 @@ export async function runAccessibility(propertyId: string): Promise<ActionResult
 
   const loaded = await loadPropertyContext(ctx, propertyId)
   if (!loaded) return { ok: false, error: "Property not found." }
+  if (!(await consumeRateLimit(`accessibility:${ctx.user.id}`, 8))) {
+    return { ok: false, error: "Planner requests are temporarily limited. Please try again shortly." }
+  }
 
   try {
     const job = await runJob<typeof loaded.context, AccessibilityOutput>({
@@ -221,6 +226,7 @@ export async function verifyAccessibility(propertyId: string): Promise<ActionRes
 
 export async function getEvPlan(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const rows = await db
     .select()
     .from(evPlan)
@@ -237,6 +243,9 @@ export async function runEvPlan(propertyId: string): Promise<ActionResult<{ stat
 
   const loaded = await loadPropertyContext(ctx, propertyId)
   if (!loaded) return { ok: false, error: "Property not found." }
+  if (!(await consumeRateLimit(`ev-plan:${ctx.user.id}`, 8))) {
+    return { ok: false, error: "Planner requests are temporarily limited. Please try again shortly." }
+  }
 
   try {
     const job = await runJob<typeof loaded.context, EvPlanOutput>({

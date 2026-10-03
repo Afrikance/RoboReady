@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { assessment, property, siteConcept, infrastructureAsset } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { runJob } from "@/lib/ai/orchestrator"
 import {
   computeRoboReadyScore,
@@ -16,10 +16,12 @@ import {
 } from "@/lib/ai/schemas"
 import { getIntake } from "@/app/actions/intake"
 import { getPurchasedTier } from "@/app/actions/payments"
+import { consumeRateLimit } from "@/lib/rate-limit"
 import type { ActionResult } from "@/app/actions/properties"
 
 export async function getLatestAssessment(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const rows = await db
     .select()
     .from(assessment)
@@ -31,6 +33,7 @@ export async function getLatestAssessment(propertyId: string) {
 
 export async function getLatestConcept(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const rows = await db
     .select()
     .from(siteConcept)
@@ -56,12 +59,12 @@ export async function runAssessment(propertyId: string): Promise<ActionResult<{ 
     return { ok: false, error: "You do not have permission to run assessments." }
   }
 
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "operations")
   if (!prop) return { ok: false, error: "Property not found." }
+
+  if (!(await consumeRateLimit(`assessment:${ctx.user.id}`, 2))) {
+    return { ok: false, error: "Assessment requests are temporarily limited. Please try again shortly." }
+  }
 
   const intake = await getIntake(propertyId)
 

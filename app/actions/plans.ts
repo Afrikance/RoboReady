@@ -6,12 +6,13 @@ import { generateImage } from "ai"
 import { put } from "@vercel/blob"
 import { db } from "@/lib/db"
 import { property, propertyPlan, document } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
 import { runJob } from "@/lib/ai/orchestrator"
 import type { SitePlanDesignOutput } from "@/lib/ai/schemas"
 import { getIntake } from "@/app/actions/intake"
 import { getLatestAssessment, getLatestConcept } from "@/app/actions/assessment"
 import type { ActionResult } from "@/app/actions/properties"
+import { consumeRateLimit } from "@/lib/rate-limit"
 
 // Text-to-image model used for the illustrative plan renders. If this call
 // fails for any reason, the plan still ships with its SVG schematic.
@@ -19,6 +20,7 @@ const IMAGE_MODEL = "bytedance/seedream-4.0"
 
 export async function getPlan(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const rows = await db
     .select()
     .from(propertyPlan)
@@ -91,12 +93,11 @@ export async function runPlans(propertyId: string): Promise<ActionResult<{ floor
     return { ok: false, error: "You do not have permission to generate plans." }
   }
 
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "operations")
   if (!prop) return { ok: false, error: "Property not found." }
+  if (!(await consumeRateLimit(`plans:${ctx.user.id}`, 4))) {
+    return { ok: false, error: "Plan generation is temporarily limited. Please try again shortly." }
+  }
 
   const [intake, assessment, concept] = await Promise.all([
     getIntake(propertyId),

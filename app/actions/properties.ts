@@ -250,6 +250,7 @@ export async function createProperty(input: PropertyInput): Promise<ActionResult
 
 export async function updatePropertyStatus(id: string, status: string): Promise<ActionResult> {
   const ctx = await requireOrgContext()
+  if (!canCreateProspect(ctx.role)) return { ok: false, error: "You do not have permission to change property status." }
   await db
     .update(property)
     .set({ status, updatedAt: new Date() })

@@ -3,7 +3,7 @@
 import { and, desc, eq, ne } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
-import { invite, membership, user } from "@/lib/db/schema"
+import { invite, membership, propertyAssignment, user } from "@/lib/db/schema"
 import {
   ASSIGNABLE_ROLES,
   recordAudit,
@@ -11,12 +11,14 @@ import {
   type Role,
 } from "@/lib/tenancy"
 import { canManageTeam } from "@/lib/access"
+import { consumeRateLimit } from "@/lib/rate-limit"
 import type { ActionResult } from "@/app/actions/properties"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function listMembers() {
   const ctx = await requireOrgContext()
+  if (!canManageTeam(ctx.role)) return []
   return db
     .select({
       userId: membership.userId,
@@ -33,6 +35,7 @@ export async function listMembers() {
 
 export async function listInvites() {
   const ctx = await requireOrgContext()
+  if (!canManageTeam(ctx.role)) return []
   return db
     .select({
       id: invite.id,
@@ -49,10 +52,16 @@ export async function listInvites() {
 export async function inviteMember(email: string, role: string): Promise<ActionResult> {
   const ctx = await requireOrgContext()
   if (!canManageTeam(ctx.role)) return { ok: false, error: "You do not have permission to invite people." }
+  if (!(await consumeRateLimit(`team-invite:${ctx.user.id}`, 8))) {
+    return { ok: false, error: "Too many invitations. Please try again shortly." }
+  }
 
   const normalized = email.trim().toLowerCase()
   if (!EMAIL_RE.test(normalized)) return { ok: false, error: "Enter a valid email address." }
   if (!ASSIGNABLE_ROLES.includes(role as Role)) return { ok: false, error: "Choose a valid role." }
+  if (ctx.role === "admin" && role === "admin") {
+    return { ok: false, error: "Only the workspace owner can invite another admin." }
+  }
 
   // Already a member of this org?
   const existingMember = await db
@@ -127,11 +136,25 @@ export async function changeMemberRole(userId: string, role: string): Promise<Ac
     .limit(1)
   if (!target[0]) return { ok: false, error: "That member was not found." }
   if (target[0].role === "owner") return { ok: false, error: "The workspace owner's role cannot be changed." }
+  if (ctx.role === "admin" && (target[0].role === "admin" || role === "admin")) {
+    return { ok: false, error: "Only the workspace owner can manage admin roles." }
+  }
 
   await db
     .update(membership)
     .set({ role })
     .where(and(eq(membership.organizationId, ctx.organizationId), eq(membership.userId, userId)))
+
+  if (["operator", "vendor", "contractor"].includes(role)) {
+    await db
+      .update(propertyAssignment)
+      .set({ role })
+      .where(and(eq(propertyAssignment.organizationId, ctx.organizationId), eq(propertyAssignment.userId, userId)))
+  } else {
+    await db
+      .delete(propertyAssignment)
+      .where(and(eq(propertyAssignment.organizationId, ctx.organizationId), eq(propertyAssignment.userId, userId)))
+  }
 
   await recordAudit({
     organizationId: ctx.organizationId,
@@ -156,17 +179,35 @@ export async function removeMember(userId: string): Promise<ActionResult> {
     .from(membership)
     .where(and(eq(membership.organizationId, ctx.organizationId), eq(membership.userId, userId)))
     .limit(1)
-  if (target[0]?.role === "owner") return { ok: false, error: "The workspace owner cannot be removed." }
+  if (!target[0]) return { ok: false, error: "That member was not found." }
+  if (target[0].role === "owner") return { ok: false, error: "The workspace owner cannot be removed." }
+  if (ctx.role === "admin" && target[0].role === "admin") {
+    return { ok: false, error: "Only the workspace owner can remove an admin." }
+  }
 
-  await db
-    .delete(membership)
-    .where(
-      and(
-        eq(membership.organizationId, ctx.organizationId),
-        eq(membership.userId, userId),
-        ne(membership.role, "owner"),
-      ),
-    )
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(propertyAssignment)
+      .where(and(eq(propertyAssignment.organizationId, ctx.organizationId), eq(propertyAssignment.userId, userId)))
+
+    await tx
+      .delete(membership)
+      .where(
+        and(
+          eq(membership.organizationId, ctx.organizationId),
+          eq(membership.userId, userId),
+          ne(membership.role, "owner"),
+        ),
+      )
+  })
+
+  await recordAudit({
+    organizationId: ctx.organizationId,
+    userId: ctx.user.id,
+    action: "member.removed",
+    entityType: "membership",
+    entityId: userId,
+  })
 
   revalidatePath("/dashboard/team")
   return { ok: true, data: undefined }

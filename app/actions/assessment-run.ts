@@ -1,9 +1,9 @@
 "use server"
 
-import { and, eq } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { db } from "@/lib/db"
-import { assessmentRun, property } from "@/lib/db/schema"
-import { isClient, requireOrgContext } from "@/lib/tenancy"
+import { assessmentRun } from "@/lib/db/schema"
+import { getAuthorizedProperty, requireOrgContext } from "@/lib/tenancy"
 import { advanceAssessmentRun, getRunForProperty } from "@/lib/assessment/lifecycle"
 import { isTerminal, type AssessmentStage } from "@/lib/assessment/stages"
 
@@ -30,13 +30,7 @@ const EMPTY: AssessmentRunState = {
 /** Confirms the caller may see this property's run (owner client or staff). */
 async function assertPropertyAccess(propertyId: string) {
   const ctx = await requireOrgContext()
-  const [prop] = await db
-    .select({ id: property.id, createdByUserId: property.createdByUserId })
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
-  if (!prop) throw new Error("NOT_FOUND")
-  if (isClient(ctx.role) && prop.createdByUserId !== ctx.user.id) throw new Error("FORBIDDEN")
+  if (!(await getAuthorizedProperty(ctx, propertyId, "report"))) throw new Error("NOT_FOUND")
   return ctx
 }
 
