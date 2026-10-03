@@ -24,6 +24,13 @@ export const user = pgTable("user", {
   email: text("email").notNull().unique(),
   emailVerified: boolean("emailVerified").notNull().default(false),
   image: text("image"),
+  phone: text("phone"),
+  addressLine1: text("addressLine1"),
+  addressLine2: text("addressLine2"),
+  city: text("city"),
+  region: text("region"),
+  postalCode: text("postalCode"),
+  country: text("country"),
   createdAt: timestamp("createdAt").notNull().defaultNow(),
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
