@@ -33,21 +33,21 @@ async function requireAdmin() {
   return ctx
 }
 
-async function latestIntakeAnswers(propertyId: string): Promise<Record<string, unknown>> {
+async function latestIntakeAnswers(propertyId: string, organizationId: string): Promise<Record<string, unknown>> {
   const [row] = await db
     .select({ answers: intakeSubmission.answers })
     .from(intakeSubmission)
-    .where(eq(intakeSubmission.propertyId, propertyId))
+    .where(and(eq(intakeSubmission.propertyId, propertyId), eq(intakeSubmission.organizationId, organizationId)))
     .orderBy(desc(intakeSubmission.updatedAt))
     .limit(1)
   return (row?.answers as Record<string, unknown>) ?? {}
 }
 
-async function latestScore(propertyId: string): Promise<number | null> {
+async function latestScore(propertyId: string, organizationId: string): Promise<number | null> {
   const [row] = await db
     .select({ score: assessment.roboReadyScore })
     .from(assessment)
-    .where(eq(assessment.propertyId, propertyId))
+    .where(and(eq(assessment.propertyId, propertyId), eq(assessment.organizationId, organizationId)))
     .orderBy(desc(assessment.version))
     .limit(1)
   return row?.score ?? null
@@ -67,7 +67,7 @@ export async function getNetworkAdminState(propertyId: string): Promise<NetworkA
   if (!prop) return null
 
   const listing = await getListingByProperty(propertyId)
-  const answers = await latestIntakeAnswers(propertyId)
+  const answers = await latestIntakeAnswers(propertyId, ctx.organizationId)
   const derived = deriveAmenities(answers)
   const overridesRaw = (listing?.amenityOverrides as { added?: string[]; removed?: string[] } | null) ?? {}
   const overrides = { added: overridesRaw.added ?? [], removed: overridesRaw.removed ?? [] }
@@ -81,7 +81,7 @@ export async function getNetworkAdminState(propertyId: string): Promise<NetworkA
     derivedAmenities: derived,
     resolvedAmenities: resolveAmenities(derived, overrides),
     overrides,
-    roboReadyScore: listing?.roboReadyScore ?? (await latestScore(propertyId)),
+    roboReadyScore: listing?.roboReadyScore ?? (await latestScore(propertyId, ctx.organizationId)),
     publishedAt: listing?.publishedAt ? listing.publishedAt.toISOString() : null,
     liveStatus: (listing?.liveStatus as AvActivity | null) ?? null,
     tesla: { connected: tesla.connected, label: tesla.label },
@@ -111,11 +111,11 @@ export async function publishListing(propertyId: string, input: PublishInput): P
     .limit(1)
   if (!prop) return { ok: false, error: "Property not found." }
 
-  const answers = await latestIntakeAnswers(propertyId)
+  const answers = await latestIntakeAnswers(propertyId, ctx.organizationId)
   const derived = deriveAmenities(answers)
   const overrides = { added: input.overrides?.added ?? [], removed: input.overrides?.removed ?? [] }
   const resolved = resolveAmenities(derived, overrides)
-  const score = await latestScore(propertyId)
+  const score = await latestScore(propertyId, ctx.organizationId)
   const now = new Date()
 
   const existing = await getListingByProperty(propertyId)
@@ -139,7 +139,10 @@ export async function publishListing(propertyId: string, input: PublishInput): P
   }
 
   if (existing) {
-    await db.update(networkListing).set(values).where(eq(networkListing.id, existing.id))
+    await db
+      .update(networkListing)
+      .set(values)
+      .where(and(eq(networkListing.id, existing.id), eq(networkListing.organizationId, ctx.organizationId)))
   } else {
     await db.insert(networkListing).values({ id: crypto.randomUUID(), propertyId, liveStatus: {}, ...values })
   }

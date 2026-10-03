@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache"
 import { after } from "next/server"
 import { db } from "@/lib/db"
 import { payment, property, proposal } from "@/lib/db/schema"
-import { assertRole, isClient, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, isClient, isFieldRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
 import { stripe } from "@/lib/stripe"
 import { getAssessmentTier, tierRank, type AssessmentTierId } from "@/lib/products"
 import { startAssessmentRun, runAssessmentToCompletion } from "@/lib/assessment/lifecycle"
@@ -76,11 +76,8 @@ export async function startAssessmentCheckout(
 ): Promise<CheckoutStart> {
   const ctx = await requireOrgContext()
 
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  if (isFieldRole(ctx.role)) throw new Error("Property not found.")
+  const prop = await getAuthorizedProperty(ctx, propertyId, "billing")
   if (!prop) throw new Error("Property not found.")
 
   // Clients (property owners) may buy assessments for their OWN properties;
@@ -110,6 +107,7 @@ export async function startAssessmentCheckout(
  */
 export async function getPurchasedTier(propertyId: string): Promise<AssessmentTierId | null> {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "billing"))) return null
   const rows = await db
     .select({ tier: payment.tier })
     .from(payment)
@@ -165,6 +163,9 @@ export async function confirmPayment(paymentId: string): Promise<ActionResult<{ 
     .where(and(eq(payment.id, paymentId), eq(payment.organizationId, ctx.organizationId)))
     .limit(1)
   if (!row) return { ok: false, error: "Payment not found." }
+  if (row.propertyId && !(await getAuthorizedProperty(ctx, row.propertyId, "billing"))) {
+    return { ok: false, error: "Payment not found." }
+  }
   // A client may only confirm their own payments.
   if (isClient(ctx.role) && row.createdByUserId !== ctx.user.id) {
     return { ok: false, error: "Payment not found." }
@@ -246,6 +247,7 @@ export async function confirmPayment(paymentId: string): Promise<ActionResult<{ 
 
 export async function listPayments(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "billing"))) return []
   return db
     .select()
     .from(payment)

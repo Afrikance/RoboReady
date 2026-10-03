@@ -4,13 +4,14 @@ import { and, asc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { membership, property, propertyAssignment, user } from "@/lib/db/schema"
-import { FIELD_ROLES, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { FIELD_ROLES, getAuthorizedProperty, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { canManageTeam } from "@/lib/access"
 import type { ActionResult } from "@/app/actions/properties"
 
 /** Field-role members of the org who can be assigned to build out a property. */
 export async function listAssignableStaff() {
   const ctx = await requireOrgContext()
+  if (!canManageTeam(ctx.role)) return []
   return db
     .select({
       userId: membership.userId,
@@ -32,6 +33,7 @@ export async function listAssignableStaff() {
 /** Current assignments for a property, joined with the assignee's identity. */
 export async function listAssignmentsForProperty(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!canManageTeam(ctx.role) || !(await getAuthorizedProperty(ctx, propertyId, "read"))) return []
   return db
     .select({
       id: propertyAssignment.id,
@@ -107,7 +109,7 @@ export async function unassignStaff(assignmentId: string): Promise<ActionResult>
   if (!canManageTeam(ctx.role)) return { ok: false, error: "You do not have permission to do that." }
 
   const rows = await db
-    .select({ propertyId: propertyAssignment.propertyId })
+    .select({ propertyId: propertyAssignment.propertyId, userId: propertyAssignment.userId })
     .from(propertyAssignment)
     .where(
       and(eq(propertyAssignment.id, assignmentId), eq(propertyAssignment.organizationId, ctx.organizationId)),
@@ -120,6 +122,16 @@ export async function unassignStaff(assignmentId: string): Promise<ActionResult>
       and(eq(propertyAssignment.id, assignmentId), eq(propertyAssignment.organizationId, ctx.organizationId)),
     )
 
-  if (rows[0]) revalidatePath(`/dashboard/properties/${rows[0].propertyId}`)
+  if (rows[0]) {
+    await recordAudit({
+      organizationId: ctx.organizationId,
+      userId: ctx.user.id,
+      action: "property.unassigned",
+      entityType: "property",
+      entityId: rows[0].propertyId,
+      metadata: { userId: rows[0].userId },
+    })
+    revalidatePath(`/dashboard/properties/${rows[0].propertyId}`)
+  }
   return { ok: true, data: undefined }
 }

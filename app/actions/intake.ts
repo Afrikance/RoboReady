@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { intakeSubmission, property } from "@/lib/db/schema"
-import { hasRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { getAuthorizedProperty, hasRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { intakeCompletion } from "@/lib/intake/questions"
 import { syncListingFromAssessment } from "@/lib/network/data"
 import type { ActionResult } from "@/app/actions/properties"
@@ -21,6 +21,7 @@ function dropClaim(metadata: unknown): Record<string, unknown> {
 /** Returns the latest intake submission for a property, or null. */
 export async function getIntake(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "intake"))) return null
   const rows = await db
     .select()
     .from(intakeSubmission)
@@ -37,12 +38,7 @@ export async function saveIntake(
 ): Promise<ActionResult<{ id: string; completion: number }>> {
   const ctx = await requireOrgContext()
 
-  // Ownership check.
-  const [prop] = await db
-    .select({ id: property.id, status: property.status, metadata: property.metadata })
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "intake")
   if (!prop) return { ok: false, error: "Property not found." }
 
   const completion = intakeCompletion(answers)

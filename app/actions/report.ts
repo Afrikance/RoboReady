@@ -4,13 +4,14 @@ import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { assessment, siteConcept, infrastructureAsset, payment, property, propertyPlan } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { reportFeaturesForTier, tierRank, type AssessmentTierId } from "@/lib/products"
 import { runJob } from "@/lib/ai/orchestrator"
 import { buildReferralCtaData } from "@/lib/cyber-fleet-server"
 import type { ReportOutput } from "@/lib/ai/schemas"
 import type { ActionResult } from "@/app/actions/properties"
 import type { ReportContext } from "@/components/report/report-view"
+import { consumeRateLimit } from "@/lib/rate-limit"
 
 /**
  * Assembles the full ReportContext for a property from the latest assessment,
@@ -20,11 +21,7 @@ import type { ReportContext } from "@/components/report/report-view"
 export async function buildReportContext(propertyId: string): Promise<ReportContext | null> {
   const ctx = await requireOrgContext()
 
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "report")
   if (!prop) return null
 
   const [assess] = await db
@@ -136,12 +133,11 @@ export async function generateReport(propertyId: string): Promise<ActionResult<{
     return { ok: false, error: "You do not have permission to generate reports." }
   }
 
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "operations")
   if (!prop) return { ok: false, error: "Property not found." }
+  if (!(await consumeRateLimit(`report:${ctx.user.id}`, 4))) {
+    return { ok: false, error: "Report requests are temporarily limited. Please try again shortly." }
+  }
 
   const [assess] = await db
     .select()

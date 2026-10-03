@@ -4,18 +4,20 @@ import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { property, proposal, infrastructureAsset } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { runJob } from "@/lib/ai/orchestrator"
 import type { ProposalOutput } from "@/lib/ai/schemas"
 import { DEFAULT_DEPOSIT_RATE } from "@/lib/products"
 import { getLatestAssessment, getLatestConcept } from "@/app/actions/assessment"
 import { getEvPlan } from "@/app/actions/planners"
 import type { ActionResult } from "@/app/actions/properties"
+import { consumeRateLimit } from "@/lib/rate-limit"
 
 export type ProposalLineItem = { name: string; description: string; quantity: number; unitPrice: number }
 
 export async function getLatestProposal(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "read"))) return null
   const rows = await db
     .select()
     .from(proposal)
@@ -43,12 +45,11 @@ export async function generateProposal(propertyId: string): Promise<ActionResult
     return { ok: false, error: "You do not have permission to generate proposals." }
   }
 
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, propertyId, "operations")
   if (!prop) return { ok: false, error: "Property not found." }
+  if (!(await consumeRateLimit(`proposal:${ctx.user.id}`, 4))) {
+    return { ok: false, error: "Proposal generation is temporarily limited. Please try again shortly." }
+  }
 
   const [assessment, concept, ev, assets] = await Promise.all([
     getLatestAssessment(propertyId),
@@ -165,6 +166,11 @@ export async function setDepositRate(proposalId: string, rate: number): Promise<
 /** Marks a proposal as sent to the client (no payment yet). */
 export async function markProposalSent(proposalId: string): Promise<ActionResult> {
   const ctx = await requireOrgContext()
+  try {
+    assertRole(ctx, "member")
+  } catch {
+    return { ok: false, error: "You do not have permission to send proposals." }
+  }
   const [row] = await db
     .select()
     .from(proposal)

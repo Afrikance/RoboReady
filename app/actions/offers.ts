@@ -8,6 +8,7 @@ import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { getAssessmentTier, type AssessmentTierId } from "@/lib/products"
 import { createNotification } from "@/lib/notifications"
 import type { ActionResult } from "@/app/actions/properties"
+import { consumeRateLimit } from "@/lib/rate-limit"
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -35,6 +36,9 @@ export async function offerAssessment(
   const normalized = email.trim().toLowerCase()
   if (!EMAIL_RE.test(normalized)) return { ok: false, error: "Enter a valid email address." }
   if (!getAssessmentTier(tierId)) return { ok: false, error: "Choose a valid assessment tier." }
+  if (!(await consumeRateLimit(`assessment-offer:${ctx.user.id}`, 8))) {
+    return { ok: false, error: "Too many assessment offers. Please try again shortly." }
+  }
 
   const [prop] = await db
     .select()
@@ -46,8 +50,8 @@ export async function offerAssessment(
   // Does this email already belong to a user we can hand the property to now?
   const [existingUser] = await db.select().from(user).where(eq(user.email, normalized)).limit(1)
 
-  if (existingUser) {
-    // Hand the property to the existing client and notify them immediately.
+  if (existingUser?.emailVerified) {
+    // Transfer ownership only to an account whose email control has been verified.
     await db
       .update(property)
       .set({ createdByUserId: existingUser.id, updatedAt: new Date() })

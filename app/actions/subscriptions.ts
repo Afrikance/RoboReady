@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { property, serviceSubscription } from "@/lib/db/schema"
-import { assertRole, recordAudit, requireOrgContext } from "@/lib/tenancy"
+import { assertRole, getAuthorizedProperty, recordAudit, requireOrgContext } from "@/lib/tenancy"
 import { stripe } from "@/lib/stripe"
 import { getServicePlan, planAmountCents, type BillingInterval } from "@/lib/service-plans"
 import type { CheckoutStart } from "@/app/actions/payments"
@@ -30,11 +30,7 @@ export async function startSubscriptionCheckout(input: {
   const ctx = await requireOrgContext()
   assertRole(ctx, "member")
 
-  const [prop] = await db
-    .select()
-    .from(property)
-    .where(and(eq(property.id, input.propertyId), eq(property.organizationId, ctx.organizationId)))
-    .limit(1)
+  const prop = await getAuthorizedProperty(ctx, input.propertyId, "billing")
   if (!prop) throw new Error("Property not found.")
   if (FUNNEL_STATES.has(prop.status)) {
     throw new Error("Service plans unlock once the property is verified.")
@@ -119,7 +115,9 @@ export async function confirmSubscription(subscriptionId: string): Promise<Actio
     .from(serviceSubscription)
     .where(and(eq(serviceSubscription.id, subscriptionId), eq(serviceSubscription.organizationId, ctx.organizationId)))
     .limit(1)
-  if (!row) return { ok: false, error: "Subscription not found." }
+  if (!row || !(await getAuthorizedProperty(ctx, row.propertyId, "billing"))) {
+    return { ok: false, error: "Subscription not found." }
+  }
   if (row.status === "active") return { ok: true, data: { status: "active" } }
   if (!row.stripeSessionId) return { ok: false, error: "Subscription is not linked to a checkout session." }
 
@@ -172,7 +170,9 @@ export async function cancelSubscription(subscriptionId: string): Promise<Action
     .from(serviceSubscription)
     .where(and(eq(serviceSubscription.id, subscriptionId), eq(serviceSubscription.organizationId, ctx.organizationId)))
     .limit(1)
-  if (!row) return { ok: false, error: "Subscription not found." }
+  if (!row || !(await getAuthorizedProperty(ctx, row.propertyId, "billing"))) {
+    return { ok: false, error: "Subscription not found." }
+  }
   if (row.status !== "active") return { ok: false, error: "Only an active plan can be canceled." }
 
   if (row.stripeSubscriptionId) {
@@ -204,6 +204,7 @@ export async function cancelSubscription(subscriptionId: string): Promise<Action
 
 export async function getActiveSubscription(propertyId: string) {
   const ctx = await requireOrgContext()
+  if (!(await getAuthorizedProperty(ctx, propertyId, "billing"))) return null
   const [row] = await db
     .select()
     .from(serviceSubscription)
