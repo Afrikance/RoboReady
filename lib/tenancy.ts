@@ -5,7 +5,7 @@ import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { auditLog, invite, membership, organization, property, propertyAssignment } from "@/lib/db/schema"
-import { isFieldRole, type Role } from "@/lib/roles"
+import { isFieldRole, roleGrantedByInvite, type Role } from "@/lib/roles"
 import { canAccessProperty, meetsRoleRequirement, type PropertyAccessPurpose } from "@/lib/property-access-policy"
 
 // Re-export the client-safe role primitives so existing `@/lib/tenancy`
@@ -217,135 +217,161 @@ async function ensurePlatformOrg(createdByUserId: string): Promise<void> {
   }
 }
 
-/**
- * Consumes the oldest pending invite matching this user's email and returns the
- * role it grants. This is how a Client / Field Operator / Vendor / Contractor /
- * Sub-Admin is provisioned: a Super Admin or Sub-Admin invites their email, and
- * after email verification the invite may decide their role in the shared org.
- * An invite can never mint the Super Admin (owner); an "owner" invite is
- * downgraded to Sub-Admin. Returns null when there is no eligible invite.
- */
-async function consumePendingInviteRole(user: SessionUser): Promise<Role | null> {
-  // An invite is a privilege grant, not proof that the person controls its email address.
-  if (!user.emailVerified) return null
 
-  const pending = await db
-    .select()
-    .from(invite)
-    .where(
-      and(
-        eq(invite.organizationId, PLATFORM_ORG_ID),
-        eq(invite.email, user.email.toLowerCase()),
-        eq(invite.status, "pending"),
-      ),
-    )
-    .orderBy(desc(invite.createdAt))
-    .limit(1)
-
-  const row = pending[0]
-  if (!row) return null
-
-  await db
-    .update(invite)
-    .set({ status: "accepted", acceptedByUserId: user.id, acceptedAt: new Date() })
-    .where(eq(invite.id, row.id))
-
-  // Solicited flow: an invite that names a property hands that property to the
-  // accepting client so it shows up in their portfolio and passes the per-user
-  // ownership checks that gate purchase + tracking.
-  if (row.propertyId) {
-    try {
-      await db
-        .update(property)
-        .set({ createdByUserId: user.id, updatedAt: new Date() })
-        .where(and(eq(property.id, row.propertyId), eq(property.organizationId, row.organizationId)))
-    } catch (err) {
-      console.log("[v0] invite property handover failed:", (err as Error).message)
-    }
-  }
-
-  await recordAudit({
-    organizationId: PLATFORM_ORG_ID,
-    userId: user.id,
-    action: "invite.accepted",
-    entityType: "invite",
-    entityId: row.id,
-    metadata: { role: row.role, propertyId: row.propertyId ?? undefined },
-  })
-
-  return row.role === "owner" ? "admin" : (row.role as Role)
-}
 
 /**
  * Guarantees the signed-in user is a member of the shared platform org. Called
  * after auth to lazily provision membership on first entry. Role resolution:
  * a verified, explicitly configured Super Admin email may bootstrap the owner;
  * otherwise a verified pending invite decides the role; otherwise the account
- * defaults to Client. Idempotent; existing owner memberships remain unchanged.
+ * defaults to Client. Membership changes and invite consumption are atomic.
  */
 export async function ensureOrganization(): Promise<OrgContext> {
   const user = await requireUser()
   await ensurePlatformOrg(user.id)
 
-  const existing = await getOrgContext()
-  if (existing) {
-    if (isSuperAdminEmail(user.email) && user.emailVerified && existing.role !== "owner") {
-      await db.update(membership).set({ role: "owner" }).where(eq(membership.userId, user.id))
-      return { ...existing, role: "owner" }
-    }
-
-    if (user.emailVerified && existing.role === "client") {
-      const invitedRole = await consumePendingInviteRole(user)
-      if (invitedRole && invitedRole !== "client") {
-        await db
-          .update(membership)
-          .set({ role: invitedRole })
-          .where(and(eq(membership.organizationId, existing.organizationId), eq(membership.userId, user.id)))
-        return { ...existing, role: invitedRole }
-      }
-    }
-
-    return existing
-  }
-
-  let role: Role = "client"
-  if (isSuperAdminEmail(user.email) && user.emailVerified) {
-    role = "owner"
-  } else {
-    const invitedRole = await consumePendingInviteRole(user)
-    if (invitedRole) role = invitedRole
-  }
-
   try {
-    await db.insert(membership).values({
-      id: crypto.randomUUID(),
-      organizationId: PLATFORM_ORG_ID,
-      userId: user.id,
-      role,
+    const result = await db.transaction(async (tx) => {
+      let acceptedInvite: { id: string; role: string; propertyId: string | null } | null = null
+      let createdMembership = false
+      const [existing] = await tx
+        .select({
+          organizationId: membership.organizationId,
+          role: membership.role,
+          organizationName: organization.name,
+          logoUrl: organization.logoUrl,
+        })
+        .from(membership)
+        .innerJoin(organization, eq(organization.id, membership.organizationId))
+        .where(and(eq(membership.userId, user.id), eq(membership.organizationId, PLATFORM_ORG_ID)))
+        .limit(1)
+
+      let role: Role = existing ? (existing.role as Role) : "client"
+
+      if (isSuperAdminEmail(user.email) && user.emailVerified && (!existing || role !== "owner")) {
+        role = "owner"
+      } else if (user.emailVerified && (!existing || role === "client")) {
+        const [pending] = await tx
+          .select()
+          .from(invite)
+          .where(
+            and(
+              eq(invite.organizationId, PLATFORM_ORG_ID),
+              eq(invite.email, user.email.toLowerCase()),
+              eq(invite.status, "pending"),
+            ),
+          )
+          .orderBy(desc(invite.createdAt))
+          .limit(1)
+
+        const invitedRole = pending ? roleGrantedByInvite(pending.role) : null
+        if (pending && invitedRole) {
+          const [claimed] = await tx
+            .update(invite)
+            .set({ status: "accepted", acceptedByUserId: user.id, acceptedAt: new Date() })
+            .where(
+              and(
+                eq(invite.id, pending.id),
+                eq(invite.organizationId, PLATFORM_ORG_ID),
+                eq(invite.email, user.email.toLowerCase()),
+                eq(invite.status, "pending"),
+              ),
+            )
+            .returning({ id: invite.id, role: invite.role, propertyId: invite.propertyId })
+
+          if (claimed) {
+            acceptedInvite = claimed
+            role = invitedRole
+            if (claimed.propertyId) {
+              await tx
+                .update(property)
+                .set({ createdByUserId: user.id, updatedAt: new Date() })
+                .where(
+                  and(
+                    eq(property.id, claimed.propertyId),
+                    eq(property.organizationId, PLATFORM_ORG_ID),
+                  ),
+                )
+            }
+          }
+        }
+      }
+
+      if (existing) {
+        if (role !== existing.role) {
+          await tx
+            .update(membership)
+            .set({ role })
+            .where(
+              and(
+                eq(membership.organizationId, PLATFORM_ORG_ID),
+                eq(membership.userId, user.id),
+              ),
+            )
+        }
+        return {
+          context: {
+            user,
+            organizationId: existing.organizationId,
+            organizationName: existing.organizationName,
+            role,
+            logoUrl: existing.logoUrl ?? null,
+          } satisfies OrgContext,
+          createdMembership,
+          acceptedInvite,
+        }
+      }
+
+      createdMembership = true
+      await tx.insert(membership).values({
+        id: crypto.randomUUID(),
+        organizationId: PLATFORM_ORG_ID,
+        userId: user.id,
+        role,
+      })
+
+      return {
+        context: {
+          user,
+          organizationId: PLATFORM_ORG_ID,
+          organizationName: PLATFORM_ORG_NAME,
+          role,
+          logoUrl: null,
+        } satisfies OrgContext,
+        createdMembership,
+        acceptedInvite,
+      }
     })
 
-    await recordAudit({
-      organizationId: PLATFORM_ORG_ID,
-      userId: user.id,
-      action: "membership.created",
-      entityType: "membership",
-      metadata: { role },
-    })
+    if (result.createdMembership) {
+      await recordAudit({
+        organizationId: PLATFORM_ORG_ID,
+        userId: user.id,
+        action: "membership.created",
+        entityType: "membership",
+        metadata: { role: result.context.role },
+      })
+    }
+    if (result.acceptedInvite) {
+      await recordAudit({
+        organizationId: PLATFORM_ORG_ID,
+        userId: user.id,
+        action: "invite.accepted",
+        entityType: "invite",
+        entityId: result.acceptedInvite.id,
+        metadata: {
+          role: result.acceptedInvite.role,
+          propertyId: result.acceptedInvite.propertyId ?? undefined,
+        },
+      })
+    }
+
+    return result.context
   } catch (err) {
-    // A concurrent request (page + layout render at the same time) may have
-    // provisioned the membership first, tripping the unique constraint.
-    // Re-read and return the winner rather than failing.
-    console.log("[v0] ensureOrganization race, re-reading:", (err as Error).message)
+    // A concurrent first request may win the unique membership insert. If so,
+    // its committed role is authoritative and this request returns that result.
     const raced = await getOrgContext()
     if (raced) return raced
     throw err
-  }
-
-  return {
-    user,
-    organizationId: PLATFORM_ORG_ID,
-    organizationName: PLATFORM_ORG_NAME,
-    role,
-    logoUrl: null,
   }
 }

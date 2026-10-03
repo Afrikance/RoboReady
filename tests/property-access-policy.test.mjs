@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { canAccessProperty, meetsRoleRequirement } from "../lib/property-access-policy.ts"
+import { roleGrantedByInvite } from "../lib/roles.ts"
 
 test("clients are limited to their own property, including report and billing access", () => {
   for (const purpose of ["property", "read", "intake", "documents", "report", "billing"]) {
@@ -24,4 +25,11 @@ test("staff role hierarchy does not treat field roles as full members", () => {
   assert.equal(meetsRoleRequirement("client", "member"), false)
   assert.equal(meetsRoleRequirement("member", "member"), true)
   assert.equal(meetsRoleRequirement("owner", "admin"), true)
+})
+
+test("invites cannot grant the Super Admin role or unknown roles", () => {
+  assert.equal(roleGrantedByInvite("owner"), "admin")
+  assert.equal(roleGrantedByInvite("operator"), "operator")
+  assert.equal(roleGrantedByInvite("member"), null)
+  assert.equal(roleGrantedByInvite("unexpected"), null)
 })

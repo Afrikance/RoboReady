@@ -21,6 +21,12 @@ export function isFieldRole(role: Role): role is FieldRole {
  */
 export const ASSIGNABLE_ROLES: Role[] = ["admin", "client", "operator", "vendor", "contractor"]
 
+/** Maps an invitation role to a grantable role; invitations can never create an owner. */
+export function roleGrantedByInvite(inviteRole: string): Role | null {
+  if (inviteRole === "owner") return "admin"
+  return ASSIGNABLE_ROLES.includes(inviteRole as Role) ? (inviteRole as Role) : null
+}
+
 export const ROLE_LABELS: Record<Role, string> = {
   owner: "Super Admin",
   admin: "Sub-Admin",
