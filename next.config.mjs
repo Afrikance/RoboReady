@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: { ignoreBuildErrors: false },
+  experimental: {
+    serverActions: { bodySizeLimit: "4mb" },
+  },
   images: {
     unoptimized: true,
     remotePatterns: [{ protocol: "https", hostname: "**.blob.vercel-storage.com" }],

@@ -8,6 +8,8 @@ import { ScoreGauge } from "@/components/score/score-gauge"
 import { SiteFooter } from "@/components/marketing/site-footer"
 import { ASSESSMENT_TIERS } from "@/lib/products"
 import { Badge } from "@/components/ui/badge"
+import { PartnerShowcase } from "@/components/partners/partner-showcase"
+import { getHomePartnerShowcase } from "@/lib/site-partners"
 import { Bot, MapPin, FileText, ClipboardCheck, ArrowRight, Check } from "lucide-react"
 
 function priceLabel(cents: number) {
@@ -21,6 +23,7 @@ function priceLabel(cents: number) {
 export default async function LandingPage() {
   const session = await auth.api.getSession({ headers: await headers() })
   if (session?.user) redirect("/dashboard")
+  const partnerShowcase = await getHomePartnerShowcase()
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -113,6 +116,8 @@ export default async function LandingPage() {
           </div>
         </section>
 
+        <PartnerShowcase {...partnerShowcase} />
+
         <section id="pricing" className="scroll-mt-24 border-t">
           <div className="mx-auto max-w-6xl px-6 py-20">
             <div className="mx-auto max-w-2xl text-center">
@@ -174,7 +179,7 @@ export default async function LandingPage() {
     className="text-primary hover:underline"
   >
     StaffGPT
-  </a>{" "}clearAdd robot parkingthe int
+  </a>{" "}
   AI Workforce Technology.
 </p>
 

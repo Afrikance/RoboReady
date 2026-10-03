@@ -3,6 +3,58 @@
 
 @custom-variant dark (&:is(.dark *));
 
+.partner-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: partner-marquee 36s linear infinite;
+}
+
+.partner-marquee-group {
+  display: flex;
+  min-width: 100vw;
+  width: max-content;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-evenly;
+  gap: 3rem;
+  padding-inline: 2rem;
+}
+
+.partner-marquee:hover .partner-marquee-track,
+.partner-marquee:focus-within .partner-marquee-track {
+  animation-play-state: paused;
+}
+
+@keyframes partner-marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partner-marquee-track {
+    animation: none;
+  }
+}
+
+@media (max-width: 23rem) {
+  .robo-greeting {
+    width: 8rem;
+    margin-right: -1rem;
+    gap: 0.25rem;
+    padding: 0.5rem;
+  }
+
+  .robo-greeting-text {
+    font-size: 0.75rem;
+  }
+
+  .robo-greeting button[aria-label="Dismiss Robo greeting"] {
+    width: 1.5rem;
+    height: 1.5rem;
+  }
+}
+
 /*
   RoboReady design system
   - Base: cool slate/ink neutrals (technical, precise infrastructure software)

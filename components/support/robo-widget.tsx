@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { usePathname } from "next/navigation"
 import { Bot, Send, X } from "lucide-react"
 import useSWR from "swr"
 import { cn } from "@/lib/utils"
@@ -15,7 +16,9 @@ async function fetchRoboSettings(url: string): Promise<RoboSettings> {
 }
 
 export function RoboWidget() {
+  const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const [greetingDismissed, setGreetingDismissed] = useState(false)
   const userHasToggled = useRef(false)
   const { data: settings } = useSWR<RoboSettings>("/api/site-settings/robo", fetchRoboSettings, {
     revalidateOnFocus: false,
@@ -24,6 +27,10 @@ export function RoboWidget() {
   useEffect(() => {
     if (settings?.defaultOpen && !userHasToggled.current) setOpen(true)
   }, [settings?.defaultOpen])
+
+  useEffect(() => {
+    if (pathname === "/") setGreetingDismissed(false)
+  }, [pathname])
 
   const { messages, status, send } = useRoboChat()
   const [input, setInput] = useState("")
@@ -48,6 +55,35 @@ export function RoboWidget() {
 
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end gap-3 sm:bottom-6 sm:right-6">
+      {pathname === "/" && !open && !greetingDismissed ? (
+        <div className="robo-greeting flex w-40 max-w-[calc(100vw-2rem)] items-center gap-2 rounded-2xl border bg-card p-3 shadow-lg sm:w-56">
+          <button
+            type="button"
+            onClick={() => {
+              userHasToggled.current = true
+              setGreetingDismissed(true)
+              setOpen(true)
+            }}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          >
+            <span className="robo-greeting-icon hidden size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground sm:flex" aria-hidden="true">
+              <Bot className="size-5" />
+            </span>
+            <span className="robo-greeting-text min-w-0 text-sm font-medium leading-relaxed text-foreground">
+              Hi, I&apos;m Robo. Can I help you?
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setGreetingDismissed(true)}
+            aria-label="Dismiss Robo greeting"
+            className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+      ) : null}
+
       {open ? (
         <section
           aria-label="Chat with Robo"
@@ -65,6 +101,7 @@ export function RoboWidget() {
               type="button"
               onClick={() => {
                 userHasToggled.current = true
+                setGreetingDismissed(true)
                 setOpen(false)
               }}
               aria-label="Close chat"
@@ -139,6 +176,7 @@ export function RoboWidget() {
         type="button"
         onClick={() => {
           userHasToggled.current = true
+          if (!open) setGreetingDismissed(true)
           setOpen((value) => !value)
         }}
         aria-label={open ? "Close chat with Robo" : "Chat with Robo"}
