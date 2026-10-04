@@ -1,6 +1,6 @@
 "use server"
 
-import { and, desc, eq, inArray, type SQL } from "drizzle-orm"
+import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
 import { assessment, payment, property, propertyAssignment } from "@/lib/db/schema"
@@ -13,23 +13,37 @@ import { tierRank, type AssessmentTierId } from "@/lib/products"
  * the shared org:
  *  - Admins / Super Admin (and legacy members): see everything → no extra filter.
  *  - Clients (property owners): see only the properties they created.
- *  - Field roles (operator/vendor/contractor): see only assigned properties;
- *    with zero assignments they are `blocked` and see nothing.
+ *  - Field roles (operator/vendor/contractor): see properties assigned to them
+ *    or currently claimed by them in Field Work; with neither, they are blocked.
  */
 async function propertyScope(ctx: OrgContext): Promise<{ blocked: boolean; extra?: SQL }> {
   if (isFieldRole(ctx.role)) {
-    const rows = await db
-      .select({ propertyId: propertyAssignment.propertyId })
-      .from(propertyAssignment)
-      .where(
-        and(
-          eq(propertyAssignment.organizationId, ctx.organizationId),
-          eq(propertyAssignment.userId, ctx.user.id),
+    const [assignments, claimedProperties] = await Promise.all([
+      db
+        .select({ propertyId: propertyAssignment.propertyId })
+        .from(propertyAssignment)
+        .where(
+          and(
+            eq(propertyAssignment.organizationId, ctx.organizationId),
+            eq(propertyAssignment.userId, ctx.user.id),
+          ),
         ),
-      )
-    const ids = rows.map((r) => r.propertyId)
-    if (ids.length === 0) return { blocked: true }
-    return { blocked: false, extra: inArray(property.id, ids) }
+      db
+        .select({ propertyId: property.id })
+        .from(property)
+        .where(
+          and(
+            eq(property.organizationId, ctx.organizationId),
+            sql`${property.metadata} #>> '{pipeline,claim,byUserId}' = ${ctx.user.id}`,
+          ),
+        ),
+    ])
+    const ids = new Set([
+      ...assignments.map((row) => row.propertyId),
+      ...claimedProperties.map((row) => row.propertyId),
+    ])
+    if (ids.size === 0) return { blocked: true }
+    return { blocked: false, extra: inArray(property.id, [...ids]) }
   }
   if (ctx.role === "client") {
     return { blocked: false, extra: eq(property.createdByUserId, ctx.user.id) }
