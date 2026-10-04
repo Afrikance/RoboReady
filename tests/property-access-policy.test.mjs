@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { canAccessProperty, meetsRoleRequirement } from "../lib/property-access-policy.ts"
+import { canAccessProperty, fieldClaimBelongsToUser, meetsRoleRequirement } from "../lib/property-access-policy.ts"
 import { roleGrantedByInvite } from "../lib/roles.ts"
 
 test("clients are limited to their own property, including report and billing access", () => {
@@ -9,6 +9,23 @@ test("clients are limited to their own property, including report and billing ac
     assert.equal(canAccessProperty({ role: "client", purpose, isOwner: false, isAssigned: false }), false)
   }
   assert.equal(canAccessProperty({ role: "client", purpose: "operations", isOwner: true, isAssigned: false }), false)
+})
+
+test("a field-work claim grants the claimer narrow field access without a formal assignment", () => {
+  const metadata = { pipeline: { claim: { byUserId: "field-user", byName: "Field Operator" } } }
+  assert.equal(fieldClaimBelongsToUser(metadata, "field-user"), true)
+  assert.equal(fieldClaimBelongsToUser(metadata, "another-user"), false)
+  assert.equal(fieldClaimBelongsToUser({ pipeline: { claim: null } }, "field-user"), false)
+  assert.equal(fieldClaimBelongsToUser(null, "field-user"), false)
+
+  assert.equal(
+    canAccessProperty({ role: "operator", purpose: "intake", isOwner: false, isAssigned: fieldClaimBelongsToUser(metadata, "field-user") }),
+    true,
+  )
+  assert.equal(
+    canAccessProperty({ role: "operator", purpose: "report", isOwner: false, isAssigned: fieldClaimBelongsToUser(metadata, "field-user") }),
+    false,
+  )
 })
 
 test("field staff require an assignment and are limited to intake and documents", () => {

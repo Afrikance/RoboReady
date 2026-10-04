@@ -7,6 +7,16 @@ export type PropertyAccessInput = {
   isAssigned: boolean
 }
 
+/** A field-work claim grants the same narrow property access as an assignment. */
+export function fieldClaimBelongsToUser(metadata: unknown, userId: string): boolean {
+  if (!metadata || typeof metadata !== "object") return false
+  const pipeline = (metadata as { pipeline?: unknown }).pipeline
+  if (!pipeline || typeof pipeline !== "object") return false
+  const claim = (pipeline as { claim?: unknown }).claim
+  if (!claim || typeof claim !== "object") return false
+  return (claim as { byUserId?: unknown }).byUserId === userId
+}
+
 /** Pure role policy shared by server authorization and focused regression tests. */
 export function canAccessProperty(input: PropertyAccessInput): boolean {
   if (input.role === "client") return input.isOwner && input.purpose !== "operations"

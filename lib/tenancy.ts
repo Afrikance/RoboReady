@@ -6,7 +6,12 @@ import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
 import { auditLog, invite, membership, organization, property, propertyAssignment } from "@/lib/db/schema"
 import { isFieldRole, roleGrantedByInvite, type Role } from "@/lib/roles"
-import { canAccessProperty, meetsRoleRequirement, type PropertyAccessPurpose } from "@/lib/property-access-policy"
+import {
+  canAccessProperty,
+  fieldClaimBelongsToUser,
+  meetsRoleRequirement,
+  type PropertyAccessPurpose,
+} from "@/lib/property-access-policy"
 
 // Re-export the client-safe role primitives so existing `@/lib/tenancy`
 // importers keep working. The definitions live in lib/roles.ts (no server-only
@@ -134,7 +139,7 @@ export async function getAuthorizedProperty(
         ),
       )
       .limit(1)
-    isAssigned = Boolean(assignment)
+    isAssigned = Boolean(assignment) || fieldClaimBelongsToUser(row.metadata, ctx.user.id)
   }
 
   return canAccessProperty({
