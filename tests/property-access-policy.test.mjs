@@ -2,6 +2,17 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { canAccessProperty, fieldClaimBelongsToUser, meetsRoleRequirement } from "../lib/property-access-policy.ts"
 import { roleGrantedByInvite } from "../lib/roles.ts"
+import { readClaim } from "../lib/prospecting/filter.ts"
+
+test("released field-work claims are treated as available", () => {
+  assert.equal(readClaim({ pipeline: { claim: null } }), null)
+  assert.equal(readClaim({ pipeline: {} }), null)
+  assert.deepEqual(readClaim({ pipeline: { claim: { byUserId: "field-user", byName: "Field Operator" } } }), {
+    byUserId: "field-user",
+    byName: "Field Operator",
+    at: "",
+  })
+})
 
 test("clients are limited to their own property, including report and billing access", () => {
   for (const purpose of ["property", "read", "intake", "documents", "report", "billing"]) {

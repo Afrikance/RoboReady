@@ -146,14 +146,16 @@ export function HandoverList({
                         <Button size="sm" disabled className="opacity-60">
                           <Lock className="mr-1.5 h-3.5 w-3.5" /> In progress
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => start(p.id, { takeover: true })}
-                          disabled={busy}
-                        >
-                          <Hand className="mr-1.5 h-3.5 w-3.5" /> {busy ? "Taking over…" : "Take over"}
-                        </Button>
+                        {isAdmin ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => start(p.id, { takeover: true })}
+                            disabled={busy}
+                          >
+                            <Hand className="mr-1.5 h-3.5 w-3.5" /> {busy ? "Taking over…" : "Take over"}
+                          </Button>
+                        ) : null}
                         {isAdmin ? (
                           <Button variant="ghost" size="sm" onClick={() => release(p.id)} disabled={busy}>
                             Release

@@ -419,6 +419,9 @@ export async function claimProperty(
   if (!isFieldRole(ctx.role) && !hasRole(ctx, "admin")) {
     return { ok: false, error: "You do not have permission to claim field work." }
   }
+  if (opts?.takeover && !hasRole(ctx, "admin")) {
+    return { ok: false, error: "Only admins can take over field work." }
+  }
 
   const [prop] = await db
     .select({ id: property.id, status: property.status, metadata: property.metadata })
@@ -455,7 +458,9 @@ export async function claimProperty(
           eq(property.id, propertyId),
           eq(property.organizationId, ctx.organizationId),
           eq(property.status, "handover"),
-          sql`(${property.metadata} #> '{pipeline,claim}') is null`,
+          // Released claims are stored as JSON null; #>> treats both a missing
+          // path and that explicit null as SQL NULL for this atomic claim guard.
+          sql`${property.metadata} #>> '{pipeline,claim,byUserId}' is null`,
         ),
       )
       .returning({ id: property.id })
