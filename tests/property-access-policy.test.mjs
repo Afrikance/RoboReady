@@ -1,6 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { canAccessProperty, fieldClaimBelongsToUser, meetsRoleRequirement } from "../lib/property-access-policy.ts"
+import {
+  canAccessProperty,
+  fieldClaimBelongsToUser,
+  fieldCompletedIntakeBelongsToUser,
+  meetsRoleRequirement,
+} from "../lib/property-access-policy.ts"
 import { roleGrantedByInvite } from "../lib/roles.ts"
 import { readClaim } from "../lib/prospecting/filter.ts"
 
@@ -35,6 +40,32 @@ test("a field-work claim grants the claimer narrow field access without a formal
   )
   assert.equal(
     canAccessProperty({ role: "operator", purpose: "report", isOwner: false, isAssigned: fieldClaimBelongsToUser(metadata, "field-user") }),
+    false,
+  )
+})
+
+test("a field operator keeps narrow access to their submitted intake through verification", () => {
+  const submission = { status: "completed", createdByUserId: "field-user" }
+  assert.equal(fieldCompletedIntakeBelongsToUser(submission, "field-user"), true)
+  assert.equal(fieldCompletedIntakeBelongsToUser(submission, "another-user"), false)
+  assert.equal(fieldCompletedIntakeBelongsToUser({ ...submission, status: "draft" }, "field-user"), false)
+
+  assert.equal(
+    canAccessProperty({
+      role: "operator",
+      purpose: "intake",
+      isOwner: false,
+      isAssigned: fieldCompletedIntakeBelongsToUser(submission, "field-user"),
+    }),
+    true,
+  )
+  assert.equal(
+    canAccessProperty({
+      role: "operator",
+      purpose: "report",
+      isOwner: false,
+      isAssigned: fieldCompletedIntakeBelongsToUser(submission, "field-user"),
+    }),
     false,
   )
 })
