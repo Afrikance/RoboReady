@@ -129,6 +129,25 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
     ],
   },
   {
+    id: "roboticsSafety",
+    title: "Robotics Safety & Site Risk Review",
+    description:
+      "Identify site-specific hazards, safety controls, emergency procedures, and accountable reviewers before a robot pilot. This intake supports planning and is not a substitute for a qualified safety assessment, engineering review, or regulatory approval.",
+    fields: [
+      { id: "robotSafetyPlatforms", label: "Robot platform(s) and intended task", type: "textarea", placeholder: "Platform/model if known, task, operating area, and expected hours..." },
+      { id: "robotSafetyZones", label: "Where will robots operate?", type: "multiselect", options: ["Controlled staff-only area", "Shared indoor public area", "Outdoor pedestrian area", "Vehicle or loading area", "Elevator / door transitions", "Other / not yet defined"] },
+      { id: "robotSafetyHazards", label: "Known or foreseeable site hazards", type: "multiselect", options: ["Crowds or children", "Vehicle traffic / loading", "Stairs, ramps, or drop-offs", "Wet, uneven, or slippery surfaces", "Automatic doors / elevators", "Heat, weather, or low visibility", "Hazardous materials / hot equipment", "Sensitive or restricted areas", "None identified yet", "Other"] },
+      { id: "robotSafetyHazardNotes", label: "Hazard locations and conditions", type: "textarea", placeholder: "Where and when do hazards occur? Include peak traffic, blind corners, restricted zones, and near-miss history..." },
+      { id: "robotSafetyControls", label: "Existing pedestrian separation and safety controls", type: "multiselect", options: ["Dedicated route or operating hours", "Physical barriers / geofencing", "Signs or floor markings", "Staff supervision / spotter", "Speed or access restrictions", "Emergency stop available", "Incident reporting process", "No controls identified", "Other"] },
+      { id: "robotSafetyStopTested", label: "Emergency stop / safe-stop procedure tested on site", type: "select", options: ["Tested and documented", "Available but not tested", "Not available / unknown", "Not applicable to proposed system"] },
+      { id: "robotSafetyResponse", label: "Who responds to an incident or robot malfunction?", type: "textarea", placeholder: "Responsible role, contact / escalation path, steps to stop or isolate the robot, and how the area is secured..." },
+      { id: "robotSafetyCharging", label: "Charging, storage, and fire-safety considerations", type: "textarea", placeholder: "Proposed charging location, battery handling, clearances, fire-protection constraints, and responsible facilities contact..." },
+      { id: "robotSafetyData", label: "Privacy, cameras, network, and remote-access concerns", type: "textarea", placeholder: "Areas where recording or remote operation may be restricted; network/security review needs..." },
+      { id: "robotSafetyReviewer", label: "Safety review owner and approval status", type: "textarea", placeholder: "Facilities / safety reviewer, review date, open actions, and approvals still required..." },
+      { id: "robotSafetyMitigations", label: "Required mitigations before pilot approval", type: "textarea", placeholder: "List each action, accountable owner, and completion requirement before operation begins..." },
+    ],
+  },
+  {
     id: "delivery",
     title: "Autonomous Delivery Readiness",
     description:
