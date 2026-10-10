@@ -3,7 +3,7 @@
 import { and, desc, eq, inArray, sql, type SQL } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { db } from "@/lib/db"
-import { assessment, payment, property, propertyAssignment } from "@/lib/db/schema"
+import { assessment, intakeSubmission, payment, property, propertyAssignment } from "@/lib/db/schema"
 import { isFieldRole, recordAudit, requireOrgContext, type OrgContext } from "@/lib/tenancy"
 import { canCreateProspect } from "@/lib/access"
 import { tierRank, type AssessmentTierId } from "@/lib/products"
@@ -13,12 +13,12 @@ import { tierRank, type AssessmentTierId } from "@/lib/products"
  * the shared org:
  *  - Admins / Super Admin (and legacy members): see everything → no extra filter.
  *  - Clients (property owners): see only the properties they created.
- *  - Field roles (operator/vendor/contractor): see properties assigned to them
- *    or currently claimed by them in Field Work; with neither, they are blocked.
+ *  - Field roles (operator/vendor/contractor): see properties assigned to them,
+ *    currently claimed by them, or submitted by them and awaiting verification.
  */
 async function propertyScope(ctx: OrgContext): Promise<{ blocked: boolean; extra?: SQL }> {
   if (isFieldRole(ctx.role)) {
-    const [assignments, claimedProperties] = await Promise.all([
+    const [assignments, claimedProperties, submittedProperties] = await Promise.all([
       db
         .select({ propertyId: propertyAssignment.propertyId })
         .from(propertyAssignment)
@@ -37,10 +37,23 @@ async function propertyScope(ctx: OrgContext): Promise<{ blocked: boolean; extra
             sql`${property.metadata} #>> '{pipeline,claim,byUserId}' = ${ctx.user.id}`,
           ),
         ),
+      db
+        .select({ propertyId: intakeSubmission.propertyId })
+        .from(intakeSubmission)
+        .innerJoin(property, eq(property.id, intakeSubmission.propertyId))
+        .where(
+          and(
+            eq(intakeSubmission.organizationId, ctx.organizationId),
+            eq(intakeSubmission.createdByUserId, ctx.user.id),
+            eq(intakeSubmission.status, "completed"),
+            eq(property.status, "pending_verification"),
+          ),
+        ),
     ])
     const ids = new Set([
       ...assignments.map((row) => row.propertyId),
       ...claimedProperties.map((row) => row.propertyId),
+      ...submittedProperties.map((row) => row.propertyId),
     ])
     if (ids.size === 0) return { blocked: true }
     return { blocked: false, extra: inArray(property.id, [...ids]) }

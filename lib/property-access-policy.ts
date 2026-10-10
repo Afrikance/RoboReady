@@ -7,6 +7,16 @@ export type PropertyAccessInput = {
   isAssigned: boolean
 }
 
+/** A completed intake keeps its submitter's narrow access until verification. */
+export function fieldCompletedIntakeBelongsToUser(
+  intake: unknown,
+  userId: string,
+): boolean {
+  if (!intake || typeof intake !== "object") return false
+  const submission = intake as { status?: unknown; createdByUserId?: unknown }
+  return submission.status === "completed" && submission.createdByUserId === userId
+}
+
 /** A field-work claim grants the same narrow property access as an assignment. */
 export function fieldClaimBelongsToUser(metadata: unknown, userId: string): boolean {
   if (!metadata || typeof metadata !== "object") return false

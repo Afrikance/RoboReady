@@ -4,11 +4,20 @@ import { and, desc, eq } from "drizzle-orm"
 import { headers } from "next/headers"
 import { auth } from "@/lib/auth"
 import { db } from "@/lib/db"
-import { auditLog, invite, membership, organization, property, propertyAssignment } from "@/lib/db/schema"
+import {
+  auditLog,
+  intakeSubmission,
+  invite,
+  membership,
+  organization,
+  property,
+  propertyAssignment,
+} from "@/lib/db/schema"
 import { isFieldRole, roleGrantedByInvite, type Role } from "@/lib/roles"
 import {
   canAccessProperty,
   fieldClaimBelongsToUser,
+  fieldCompletedIntakeBelongsToUser,
   meetsRoleRequirement,
   type PropertyAccessPurpose,
 } from "@/lib/property-access-policy"
@@ -139,7 +148,25 @@ export async function getAuthorizedProperty(
         ),
       )
       .limit(1)
-    isAssigned = Boolean(assignment) || fieldClaimBelongsToUser(row.metadata, ctx.user.id)
+    const [submittedIntake] =
+      row.status === "pending_verification"
+        ? await db
+            .select({ status: intakeSubmission.status, createdByUserId: intakeSubmission.createdByUserId })
+            .from(intakeSubmission)
+            .where(
+              and(
+                eq(intakeSubmission.organizationId, ctx.organizationId),
+                eq(intakeSubmission.propertyId, propertyId),
+                eq(intakeSubmission.status, "completed"),
+              ),
+            )
+            .orderBy(desc(intakeSubmission.updatedAt))
+            .limit(1)
+        : []
+    isAssigned =
+      Boolean(assignment) ||
+      fieldClaimBelongsToUser(row.metadata, ctx.user.id) ||
+      fieldCompletedIntakeBelongsToUser(submittedIntake, ctx.user.id)
   }
 
   return canAccessProperty({
