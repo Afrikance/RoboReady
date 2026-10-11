@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { toast } from "sonner"
-import { UserPlus, X, Mail } from "lucide-react"
+import { UserPlus, X, Mail, Copy, KeyRound } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { changeMemberRole, inviteMember, removeMember, revokeInvite } from "@/app/actions/team"
+import { changeMemberRole, createTeamAccount, inviteMember, removeMember, revokeInvite } from "@/app/actions/team"
 
 type Role = "owner" | "admin" | "member" | "operator" | "vendor" | "contractor" | "client"
 
@@ -31,10 +31,9 @@ export type InviteItem = {
   createdAt: string | Date
 }
 
-// Kept in sync with ASSIGNABLE_ROLES / ROLE_LABELS in lib/tenancy.ts.
+// Kept in sync with ASSIGNABLE_ROLES / ROLE_LABELS in lib/roles.ts.
 const ROLE_OPTIONS: { value: Role; label: string; hint: string }[] = [
-  { value: "admin", label: "Admin", hint: "Approve AI output, manage the workspace" },
-  { value: "member", label: "Member", hint: "Run assessments and planners" },
+  { value: "admin", label: "Sub-Admin", hint: "Approve AI output, manage the workspace" },
   { value: "operator", label: "Field Operator", hint: "On-site intake & documents" },
   { value: "vendor", label: "Vendor", hint: "Build out assigned properties" },
   { value: "contractor", label: "Contractor", hint: "Build out assigned properties" },
@@ -42,8 +41,8 @@ const ROLE_OPTIONS: { value: Role; label: string; hint: string }[] = [
 ]
 
 const ROLE_LABEL: Record<string, string> = {
-  owner: "Owner",
-  admin: "Admin",
+  owner: "Super Admin",
+  admin: "Sub-Admin",
   member: "Member",
   operator: "Field Operator",
   vendor: "Vendor",
@@ -56,36 +55,141 @@ export function TeamManager({
   invites,
   currentUserId,
   canManage,
+  canCreateAccounts,
 }: {
   members: MemberItem[]
   invites: InviteItem[]
   currentUserId: string
   canManage: boolean
+  canCreateAccounts: boolean
 }) {
-  const [email, setEmail] = useState("")
-  const [role, setRole] = useState<Role>("member")
+  const [inviteEmail, setInviteEmail] = useState("")
+  const [inviteRole, setInviteRole] = useState<Role>("client")
+  const [accountName, setAccountName] = useState("")
+  const [accountEmail, setAccountEmail] = useState("")
+  const [accountRole, setAccountRole] = useState<Role>("client")
+  const [setupUrl, setSetupUrl] = useState("")
   const [pending, startTransition] = useTransition()
 
   function submitInvite() {
-    const value = email.trim()
+    const value = inviteEmail.trim()
     if (!value) {
       toast.error("Enter an email address.")
       return
     }
     startTransition(async () => {
-      const res = await inviteMember(value, role)
+      const res = await inviteMember(value, inviteRole)
       if (res.ok) {
-        toast.success(`Invited ${value} as ${ROLE_LABEL[role]}.`)
-        setEmail("")
-        setRole("member")
+        toast.success(`Invited ${value} as ${ROLE_LABEL[inviteRole]}.`)
+        setInviteEmail("")
+        setInviteRole("client")
       } else {
         toast.error(res.error)
       }
     })
   }
 
+  function submitAccountCreation() {
+    startTransition(async () => {
+      const res = await createTeamAccount({ name: accountName, email: accountEmail, role: accountRole })
+      if (!res.ok) {
+        toast.error(res.error)
+        return
+      }
+      setSetupUrl(`${window.location.origin}/account-setup?token=${encodeURIComponent(res.data.setupToken)}`)
+      setAccountName("")
+      setAccountEmail("")
+      setAccountRole("client")
+      toast.success("Login account created. Share the setup link with its owner.")
+    })
+  }
+
+  async function copySetupLink() {
+    try {
+      await navigator.clipboard.writeText(setupUrl)
+      toast.success("Password setup link copied.")
+    } catch {
+      toast.error("Could not copy the link. Select and copy it manually.")
+    }
+  }
+
   return (
     <div className="space-y-8">
+      {canCreateAccounts ? (
+        <section className="rounded-lg border border-border bg-card p-5">
+          <div className="flex items-center gap-2">
+            <KeyRound className="size-4 text-primary" />
+            <h2 className="text-sm font-semibold">Create a login account</h2>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed text-muted-foreground text-pretty">
+            The account and team access are created immediately. Share the one-time link so the person can choose their own password. It expires after 24 hours.
+          </p>
+          <form
+            className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap"
+            onSubmit={(event) => {
+              event.preventDefault()
+              submitAccountCreation()
+            }}
+          >
+            <Input
+              value={accountName}
+              onChange={(event) => setAccountName(event.target.value)}
+              placeholder="Full name"
+              aria-label="Account holder name"
+              autoComplete="name"
+              maxLength={120}
+              required
+              className="sm:flex-1"
+            />
+            <Input
+              type="email"
+              inputMode="email"
+              value={accountEmail}
+              onChange={(event) => setAccountEmail(event.target.value)}
+              placeholder="name@company.com"
+              aria-label="Account holder email"
+              autoComplete="email"
+              maxLength={254}
+              required
+              className="sm:flex-1"
+            />
+            <Select value={accountRole} onValueChange={(value) => setAccountRole(value as Role)}>
+              <SelectTrigger className="sm:w-52" aria-label="New account role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ROLE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button type="submit" disabled={pending}>
+              <UserPlus className="size-4" />
+              Create account
+            </Button>
+          </form>
+          {setupUrl ? (
+            <div className="mt-4 rounded-md border border-border bg-muted/40 p-4" role="status">
+              <p className="text-sm font-medium">Account created. Share this password setup link.</p>
+              <div className="mt-3 flex gap-2">
+                <Input value={setupUrl} readOnly aria-label="One-time password setup link" className="min-w-0 flex-1" />
+                <Button type="button" variant="outline" onClick={copySetupLink} aria-label="Copy password setup link">
+                  <Copy className="size-4" />
+                  <span className="sr-only">Copy setup link</span>
+                </Button>
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                This link can be used once and expires in 24 hours. Treat it like a password; anyone with it can set the account password.
+              </p>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canManage ? (
+        <section className="rounded-lg border border-border bg-card p-5">
       {canManage ? (
         <section className="rounded-lg border border-border bg-card p-5">
           <div className="flex items-center gap-2">
@@ -101,22 +205,22 @@ export function TeamManager({
               type="email"
               inputMode="email"
               placeholder="name@company.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.nativeEvent.isComposing && e.keyCode !== 229) submitInvite()
               }}
               className="sm:flex-1"
               aria-label="Email to invite"
             />
-            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
+            <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as Role)}>
               <SelectTrigger className="sm:w-52" aria-label="Role">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {ROLE_OPTIONS.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
+                {ROLE_OPTIONS.filter((option) => option.value !== "admin" || canCreateAccounts).map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
                   </SelectItem>
                 ))}
               </SelectContent>
