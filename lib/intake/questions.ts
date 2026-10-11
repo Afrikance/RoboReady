@@ -2,7 +2,7 @@
 // both the intake UI and the assessment engine's inputs. Grouped into sections
 // that map to the RoboReady Score categories.
 
-export type IntakeFieldType = "text" | "number" | "select" | "multiselect" | "boolean" | "textarea"
+export type IntakeFieldType = "text" | "email" | "number" | "select" | "multiselect" | "boolean" | "textarea"
 
 export type IntakeField = {
   id: string
@@ -26,8 +26,10 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
     id: "robotaxi",
     title: "Robotaxi / CyberCab Readiness",
     description:
-      "The primary use case: readiness for autonomous ride-hail (Waymo, Tesla Cybercab, Zoox) pick-up and drop-off at this property.",
+      "RoboArrival is offering a complimentary pre-assessment of this property’s readiness for autonomous vehicles (AVs) and robotics. We selected this property as a promising candidate in the area. Please share the property manager or owner’s contact details so we can coordinate next steps. This section also covers readiness for autonomous ride-hail pick-up and drop-off.",
     fields: [
+      { id: "propertyManagerName", label: "Property manager or owner name", type: "text", placeholder: "Full name" },
+      { id: "propertyManagerEmail", label: "Property manager or owner email", type: "email", placeholder: "name@example.com", help: "We’ll use this to coordinate the free pre-assessment." },
       { id: "curbAccess", label: "Curbside pick-up / drop-off (PUDO)", type: "select", options: ["Dedicated PUDO lane or apron", "Shared curb with signage", "Street-only, no on-site curb", "None"], help: "A dedicated off-street PUDO area is the single biggest robotaxi readiness factor." },
       { id: "pudoPoints", label: "Potential PUDO points on site", type: "number", placeholder: "e.g. 2" },
       { id: "avStaging", label: "Staging / short-term parking for idle AVs", type: "select", options: ["Dedicated AV staging", "Shared lot with spare capacity", "Limited", "None"] },
