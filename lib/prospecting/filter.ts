@@ -15,6 +15,10 @@ export const PROPERTY_TYPES: PropertyTypeOption[] = [
   { value: "hospital", label: "Hospital" },
   { value: "event_venue", label: "Event venue" },
   { value: "commercial", label: "Commercial (other)" },
+  { value: "manufacturing_industrial", label: "Manufacturing / industrial operations" },
+  { value: "warehousing_logistics", label: "Warehousing / logistics" },
+  { value: "commercial_facility", label: "Commercial facilities / enterprise" },
+  { value: "research_pilot", label: "Research / innovation / pilot program" },
 ]
 
 export function propertyTypeLabel(value: string): string {
