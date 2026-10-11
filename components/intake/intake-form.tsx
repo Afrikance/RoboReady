@@ -268,10 +268,12 @@ function Field({
   hint?: "ai" | "blank"
 }) {
   const isFull = field.type === "textarea" || field.type === "multiselect"
+  const isTextControl = field.type === "text" || field.type === "email" || field.type === "number" || field.type === "textarea"
+  const controlId = `intake-${field.id}`
   const isEmpty = Array.isArray(value) ? value.length === 0 : value === undefined || value === null || value === ""
   return (
     <div className={cn("space-y-2", isFull && "sm:col-span-2")}>
-      <Label className="flex flex-wrap items-center gap-2 text-sm">
+      <Label htmlFor={isTextControl ? controlId : undefined} className="flex flex-wrap items-center gap-2 text-sm">
         <span>{field.label}</span>
         {field.unit ? <span className="text-xs text-muted-foreground">({field.unit})</span> : null}
         {hint === "ai" ? (
@@ -287,9 +289,10 @@ function Field({
       </Label>
       {field.help ? <p className="text-xs text-muted-foreground">{field.help}</p> : null}
 
-      {field.type === "text" || field.type === "number" ? (
+      {field.type === "text" || field.type === "email" || field.type === "number" ? (
         <Input
-          type={field.type === "number" ? "number" : "text"}
+          id={controlId}
+          type={field.type === "number" ? "number" : field.type === "email" ? "email" : "text"}
           placeholder={field.placeholder}
           disabled={readOnly}
           value={(value as string | number | undefined) ?? ""}
@@ -299,6 +302,7 @@ function Field({
 
       {field.type === "textarea" ? (
         <Textarea
+          id={controlId}
           placeholder={field.placeholder}
           disabled={readOnly}
           value={(value as string | undefined) ?? ""}
