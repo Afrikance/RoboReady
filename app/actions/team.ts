@@ -42,8 +42,11 @@ export async function createTeamAccount(
     return { ok: false, error: "Too many account creations. Please try again shortly." }
   }
 
-  const name = input.name.trim().replace(/\s+/g, " ")
-  const normalizedEmail = input.email.trim().toLowerCase()
+  if (!input || typeof input !== "object") {
+    return { ok: false, error: "Enter a name, email address, and role." }
+  }
+  const name = typeof input.name === "string" ? input.name.trim().replace(/\s+/g, " ") : ""
+  const normalizedEmail = typeof input.email === "string" ? input.email.trim().toLowerCase() : ""
   if (name.length < 2 || name.length > 120) {
     return { ok: false, error: "Enter a name between 2 and 120 characters." }
   }
@@ -140,10 +143,10 @@ export async function completeAccountSetup(
   token: string,
   password: string,
 ): Promise<ActionResult<{ email: string }>> {
-  if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
+  if (typeof token !== "string" || !/^[A-Za-z0-9_-]{43}$/.test(token)) {
     return { ok: false, error: "This setup link is invalid or has expired. Ask your team owner for a new link." }
   }
-  if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+  if (typeof password !== "string" || password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
     return { ok: false, error: `Choose a password between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters.` }
   }
 
@@ -190,7 +193,7 @@ export async function completeAccountSetup(
       .returning({ id: account.id })
     if (!credential) return null
 
-    await tx.update(user).set({ emailVerified: true, updatedAt: now }).where(eq(user.id, userId))
+    await tx.update(user).set({ updatedAt: now }).where(eq(user.id, userId))
     await tx.delete(verification).where(eq(verification.id, setup.id))
     return { email: setupUser.email }
   })

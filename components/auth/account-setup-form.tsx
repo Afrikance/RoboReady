@@ -49,7 +49,9 @@ export function AccountSetupForm({ token }: { token: string }) {
         <p className="text-sm leading-relaxed text-muted-foreground">
           Your password is set for <span className="font-medium text-foreground">{accountEmail}</span>. You can now sign in.
         </p>
-        <Button render={<Link href="/sign-in" />}>Continue to sign in</Button>
+        <Button asChild>
+          <Link href="/sign-in">Continue to sign in</Link>
+        </Button>
       </div>
     )
   }

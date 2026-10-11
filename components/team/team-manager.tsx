@@ -90,6 +90,7 @@ export function TeamManager({
   }
 
   function submitAccountCreation() {
+    setSetupUrl("")
     startTransition(async () => {
       const res = await createTeamAccount({ name: accountName, email: accountEmail, role: accountRole })
       if (!res.ok) {
@@ -188,8 +189,6 @@ export function TeamManager({
         </section>
       ) : null}
 
-      {canManage ? (
-        <section className="rounded-lg border border-border bg-card p-5">
       {canManage ? (
         <section className="rounded-lg border border-border bg-card p-5">
           <div className="flex items-center gap-2">
