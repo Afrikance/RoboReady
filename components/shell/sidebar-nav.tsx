@@ -20,6 +20,7 @@ const NAV = [
   { href: "/dashboard/robosearch", label: "RoboSearch", icon: Radar, exact: true },
   { href: "/dashboard/blog", label: "Blog", icon: Newspaper },
   { href: "/dashboard/cyber-fleet", label: "Cyber Fleet", icon: ShieldCheck },
+  { href: "/dashboard/partners", label: "Solution Partners", icon: Handshake },
   { href: "/dashboard/support", label: "Support", icon: LifeBuoy },
   { href: "/dashboard/team", label: "Team", icon: Users },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },

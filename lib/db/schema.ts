@@ -73,8 +73,7 @@ export const partnerReferral = pgTable(
     leadId: text("leadId"),
     propertySnapshot: jsonb("propertySnapshot")
       .$type<{ name: string; city: string | null; region: string | null; country: string | null }>()
-      .notNull()
-      .default({}),
+      .notNull(),
     matchReasons: jsonb("matchReasons").$type<string[]>().notNull().default([]),
     status: text("status").notNull().default("draft"),
     notes: text("notes"),
