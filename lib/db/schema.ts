@@ -35,18 +35,76 @@ export const user = pgTable("user", {
   updatedAt: timestamp("updatedAt").notNull().defaultNow(),
 })
 
-export const session = pgTable("session", {
-  id: text("id").primaryKey(),
-  expiresAt: timestamp("expiresAt").notNull(),
-  token: text("token").notNull().unique(),
-  createdAt: timestamp("createdAt").notNull().defaultNow(),
-  updatedAt: timestamp("updatedAt").notNull().defaultNow(),
-  ipAddress: text("ipAddress"),
-  userAgent: text("userAgent"),
-  userId: text("userId")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-})
+export const solutionPartner = pgTable(
+  "solution_partner",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    name: text("name").notNull(),
+    category: text("category").notNull(),
+    capabilities: jsonb("capabilities").$type<string[]>().notNull().default([]),
+    coverage: jsonb("coverage")
+      .$type<{ nationwide: boolean; country: string | null; areas: string[] }>()
+      .notNull()
+      .default({ nationwide: false, country: null, areas: [] }),
+    contactName: text("contactName"),
+    contactEmail: text("contactEmail"),
+    contactPhone: text("contactPhone"),
+    active: boolean("active").notNull().default(true),
+    createdByUserId: text("createdByUserId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgActive: index("solution_partner_org_active_idx").on(t.organizationId, t.active),
+    validCategory: check("solution_partner_category_check", sql`${t.category} IN ('robotics', 'charging', 'both')`),
+    capabilitiesArray: check("solution_partner_capabilities_check", sql`jsonb_typeof(${t.capabilities}) = 'array'`),
+    coverageObject: check("solution_partner_coverage_check", sql`jsonb_typeof(${t.coverage}) = 'object'`),
+  }),
+)
+
+export const partnerReferral = pgTable(
+  "partner_referral",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    partnerId: text("partnerId").notNull(),
+    propertyId: text("propertyId").notNull(),
+    leadId: text("leadId"),
+    propertySnapshot: jsonb("propertySnapshot")
+      .$type<{ name: string; city: string | null; region: string | null; country: string | null }>()
+      .notNull(),
+    matchReasons: jsonb("matchReasons").$type<string[]>().notNull().default([]),
+    status: text("status").notNull().default("draft"),
+    notes: text("notes"),
+    consentObtainedAt: timestamp("consentObtainedAt"),
+    consentObtainedByUserId: text("consentObtainedByUserId"),
+    consentMethod: text("consentMethod"),
+    consentReference: text("consentReference"),
+    sentAt: timestamp("sentAt"),
+    respondedAt: timestamp("respondedAt"),
+    closedAt: timestamp("closedAt"),
+    createdByUserId: text("createdByUserId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgStatusUpdated: index("partner_referral_org_status_updated_idx").on(t.organizationId, t.status, t.updatedAt),
+    orgPartner: index("partner_referral_org_partner_idx").on(t.organizationId, t.partnerId),
+    orgProperty: index("partner_referral_org_property_idx").on(t.organizationId, t.propertyId),
+    validStatus: check(
+      "partner_referral_status_check",
+      sql`${t.status} IN ('draft', 'under_review', 'sent', 'accepted', 'declined', 'in_progress', 'won', 'lost', 'withdrawn')`,
+    ),
+    reasonsArray: check("partner_referral_match_reasons_check", sql`jsonb_typeof(${t.matchReasons}) = 'array'`),
+    snapshotObject: check("partner_referral_property_snapshot_check", sql`jsonb_typeof(${t.propertySnapshot}) = 'object'`),
+    consentBeforeSend: check(
+      "partner_referral_consent_before_send_check",
+      sql`${t.status} NOT IN ('sent', 'accepted', 'declined', 'in_progress', 'won', 'lost') OR (${t.consentObtainedAt} IS NOT NULL AND ${t.consentObtainedByUserId} IS NOT NULL AND ${t.consentMethod} IS NOT NULL)`,
+    ),
+  }),
+)
+
 
 export const account = pgTable("account", {
   id: text("id").primaryKey(),
