@@ -626,8 +626,21 @@ export const prospectPropertiesSchema = z.object({
     z.object({
       name: z.string().describe("The property's likely business name."),
       propertyType: z
-        .enum(["hotel", "apartment", "school", "business_park", "shopping_center", "hospital", "event_venue", "commercial"])
-        .describe("Best-fit category for this property."),
+        .enum([
+          "hotel",
+          "apartment",
+          "school",
+          "business_park",
+          "shopping_center",
+          "hospital",
+          "event_venue",
+          "commercial",
+          "manufacturing_industrial",
+          "warehousing_logistics",
+          "commercial_facility",
+          "research_pilot",
+        ])
+        .describe("Best-fit property or enterprise target-market category."),
       addressLine1: z.string().describe("Street address, best-effort. Leave empty if genuinely unknown."),
       city: z.string(),
       region: z.string().describe("State / province."),

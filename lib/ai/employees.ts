@@ -119,7 +119,7 @@ export const AI_EMPLOYEES: Record<EmployeeSlug, AIEmployee> = {
     title: "Property Prospector",
     department: "Sales",
     mission:
-      "Build a prospect pipeline: identify candidate commercial properties (hotels, apartment complexes, schools, business parks, shopping centers, hospitals, event venues) in a target market with best-effort contact details, clearly flagged as unverified for a human to confirm.",
+      "Build a prospect pipeline for enterprise robotics and charging opportunities: identify candidate manufacturing and industrial operations, warehouses and logistics sites, commercial facilities, and research or pilot programs with plausible practical automation needs. Prioritize customer demand, technical suitability, deployment feasibility, known budget signals, and repeat-business potential without presenting assumptions as verified facts. Include best-effort contact details and flag every lead as unverified for human confirmation.",
     requiresApproval: false,
   },
   "intake-prefiller": {
