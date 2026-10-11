@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings, DatabaseZap, ClipboardList, BadgeCheck, LifeBuoy, ShieldCheck, MapPinned, Radar, Newspaper } from "lucide-react"
+import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings, DatabaseZap, ClipboardList, BadgeCheck, LifeBuoy, ShieldCheck, MapPinned, Radar, Newspaper, Handshake } from "lucide-react"
 import { canUseNavHref } from "@/lib/access"
 import type { Role } from "@/lib/tenancy"
 
