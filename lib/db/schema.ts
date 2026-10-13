@@ -63,6 +63,73 @@ export const solutionPartner = pgTable(
   }),
 )
 
+export type RoboticsInterestRecommendation = {
+  partnerId: string
+  partnerName: string
+  category: string
+  tagCoverage: number
+  matchedCapabilities: string[]
+  reasons: string[]
+}
+
+// Customer-submitted robotics requirements stay separate from field intake and
+// partner referrals. Recommendations are internal review aids until an admin
+// confirms a selection; partner contact still requires the separate referral
+// consent workflow.
+export const roboticsInterest = pgTable(
+  "robotics_interest",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    propertyId: text("propertyId").notNull(),
+    createdByUserId: text("createdByUserId").notNull(),
+    useCase: text("useCase").notNull(),
+    tasks: jsonb("tasks").$type<string[]>().notNull().default([]),
+    environment: jsonb("environment")
+      .$type<{ location: string; access: string; operatingHours: string }>()
+      .notNull()
+      .default({ location: "mixed", access: "restricted", operatingHours: "" }),
+    operatingConditions: text("operatingConditions"),
+    humanHandoff: text("humanHandoff"),
+    safetyRequirements: text("safetyRequirements"),
+    integrationNeeds: text("integrationNeeds"),
+    serviceNeeds: text("serviceNeeds"),
+    budgetRange: text("budgetRange"),
+    targetTimeline: text("targetTimeline"),
+    additionalContext: text("additionalContext"),
+    contactName: text("contactName"),
+    contactEmail: text("contactEmail"),
+    contactPhone: text("contactPhone"),
+    contactPreference: text("contactPreference"),
+    contactConsentAt: timestamp("contactConsentAt"),
+    contactConsentByUserId: text("contactConsentByUserId"),
+    // submitted | under_review | needs_info | recommended | closed
+    status: text("status").notNull().default("submitted"),
+    recommendations: jsonb("recommendations")
+      .$type<RoboticsInterestRecommendation[]>()
+      .notNull()
+      .default([]),
+    selectedPartnerId: text("selectedPartnerId"),
+    reviewNotes: text("reviewNotes"),
+    reviewedByUserId: text("reviewedByUserId"),
+    submittedAt: timestamp("submittedAt").notNull().defaultNow(),
+    reviewedAt: timestamp("reviewedAt"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgStatusSubmitted: index("robotics_interest_org_status_submitted_idx").on(t.organizationId, t.status, t.submittedAt),
+    orgPropertySubmitted: index("robotics_interest_org_property_submitted_idx").on(t.organizationId, t.propertyId, t.submittedAt),
+    validStatus: check(
+      "robotics_interest_status_check",
+      sql`${t.status} IN ('submitted', 'under_review', 'needs_info', 'recommended', 'closed')`,
+    ),
+    tasksArray: check("robotics_interest_tasks_array_check", sql`jsonb_typeof(${t.tasks}) = 'array'`),
+    environmentObject: check("robotics_interest_environment_object_check", sql`jsonb_typeof(${t.environment}) = 'object'`),
+    recommendationsArray: check("robotics_interest_recommendations_array_check", sql`jsonb_typeof(${t.recommendations}) = 'array'`),
+  }),
+)
+
 export const partnerReferral = pgTable(
   "partner_referral",
   {

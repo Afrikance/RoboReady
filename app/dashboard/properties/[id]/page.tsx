@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { notFound } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, MapPin } from "lucide-react"
+import { ArrowLeft, Bot, MapPin } from "lucide-react"
 import { getProperty } from "@/app/actions/properties"
 import { getIntake } from "@/app/actions/intake"
 import { listDocuments } from "@/app/actions/documents"
@@ -40,6 +40,7 @@ import { listAssignableStaff, listAssignmentsForProperty } from "@/app/actions/a
 import { PropertyAssignments } from "@/components/property/property-assignments"
 import { intakeCompletion } from "@/lib/intake/questions"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 export const metadata = { title: "Property" }
 
@@ -89,13 +90,29 @@ export default async function PropertyDetailPage({ params }: { params: Promise<{
             </p>
           ) : null}
         </div>
-        <div className="mx-auto max-w-3xl">
+        <div className="mx-auto flex max-w-3xl flex-col gap-4">
           <ClientAssessment
             propertyId={id}
             initialState={runState}
             purchasedTier={purchasedTier}
             cyberFleet={cyberFleet}
           />
+          <section className="flex flex-col gap-4 rounded-lg border border-border bg-card p-5 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <Bot className="size-5" aria-hidden="true" />
+              </span>
+              <div>
+                <h2 className="font-semibold">Explore robotics for this property</h2>
+                <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
+                  Tell us about recurring tasks and site conditions. RoboReady will review fit separately from your paid property assessment.
+                </p>
+              </div>
+            </div>
+            <Button asChild className="shrink-0">
+              <Link href={`/dashboard/properties/${id}/robotics-interest`}>Request a fit review</Link>
+            </Button>
+          </section>
         </div>
       </div>
     )
