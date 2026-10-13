@@ -3,13 +3,12 @@
 import { useActionState } from 'react'
 import { ArrowLeft, Bot, CheckCircle2 } from 'lucide-react'
 import Link from 'next/link'
-import { submitRoboticsInterest, roboticsInterestInitialState } from '@/app/actions/robotics-interest'
+import { submitRoboticsInterest, type RoboticsInterestActionState } from '@/app/actions/robotics-interest'
 import { ROBOTICS_TASKS, ROBOTICS_USE_CASES } from '@/lib/robotics-interest/core'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 
 const selectClassName = 'h-10 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -26,7 +25,8 @@ export function RoboticsInterestForm({
   contactEmail: string
 }) {
   const action = submitRoboticsInterest.bind(null, propertyId)
-  const [state, formAction, pending] = useActionState(action, roboticsInterestInitialState)
+  const initialState: RoboticsInterestActionState = { status: 'idle', message: '' }
+  const [state, formAction, pending] = useActionState(action, initialState)
 
   if (state.status === 'success') {
     return (
@@ -54,7 +54,7 @@ export function RoboticsInterestForm({
           <div className="rounded-md bg-primary/10 p-2 text-primary"><Bot className="size-5" aria-hidden="true" /></div>
           <div className="flex flex-col gap-1">
             <CardTitle>Tell us what you want robotics to do</CardTitle>
-            <CardDescription>We'll review the operational fit for {propertyName}. You don't need to choose a robot, vendor, or manufacturer.</CardDescription>
+            <CardDescription>We&apos;ll review the operational fit for {propertyName}. You don&apos;t need to choose a robot, vendor, or manufacturer.</CardDescription>
           </div>
         </div>
       </CardHeader>

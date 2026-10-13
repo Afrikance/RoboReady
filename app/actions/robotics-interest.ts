@@ -4,7 +4,7 @@ import { and, desc, eq } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import { property, roboticsInterest, solutionPartner } from "@/lib/db/schema"
+import { property, roboticsInterest, solutionPartner, type RoboticsInterestRecommendation } from "@/lib/db/schema"
 import { isAdminRole } from "@/lib/access"
 import { getAuthorizedProperty, getOrgContext, isClient, recordAudit } from "@/lib/tenancy"
 import {
@@ -15,7 +15,6 @@ import {
   isRoboticsUseCase,
   rankRoboticsPartners,
   toPartnerProfile,
-  type RoboticsInterestRecommendation,
   type RoboticsInterestStatus,
 } from "@/lib/robotics-interest/core"
 import { eligibleManualPartner } from "@/lib/robotics-interest/core"
@@ -25,7 +24,6 @@ export type RoboticsInterestActionState = {
   message: string
 }
 
-const idleState: RoboticsInterestActionState = { status: "idle", message: "" }
 const interestFormSchema = z.object({
   useCase: z.custom<import("@/lib/robotics-interest/core").RoboticsUseCase>(isRoboticsUseCase),
   tasks: z.array(z.custom<import("@/lib/robotics-interest/core").RoboticsTask>(isRoboticsTask)).min(1).max(9),
@@ -174,6 +172,29 @@ export async function submitRoboticsInterest(
   }
 }
 
+export async function getCustomerRoboticsInterest(propertyId: string) {
+  const ctx = await getOrgContext()
+  if (!ctx || !isClient(ctx.role) || typeof propertyId !== "string" || !propertyId.trim() || propertyId.length > 100) {
+    return null
+  }
+
+  const propertyRow = await getAuthorizedProperty(ctx, propertyId, "read")
+  if (!propertyRow) return null
+
+  const [request] = await db
+    .select({ submittedAt: roboticsInterest.submittedAt })
+    .from(roboticsInterest)
+    .where(and(
+      eq(roboticsInterest.organizationId, ctx.organizationId),
+      eq(roboticsInterest.propertyId, propertyRow.id),
+      eq(roboticsInterest.createdByUserId, ctx.user.id),
+    ))
+    .orderBy(desc(roboticsInterest.submittedAt))
+    .limit(1)
+
+  return request ? { submittedAt: request.submittedAt.toISOString() } : null
+}
+
 export async function getRoboticsInterestReviewData() {
   const ctx = await getOrgContext()
   if (!ctx || !isAdminRole(ctx.role)) return null
@@ -264,7 +285,7 @@ export async function reviewRoboticsInterest(
     return { status: "error", message: "Choose a valid review status." }
   }
   const requestedPartnerId = clampInterestText(field(formData, "selectedPartnerId"), 100)
-  const selectedPartnerId = requestedPartnerId ?? request.selectedPartnerId
+  const selectedPartnerId = formData.has("selectedPartnerId") ? requestedPartnerId : request.selectedPartnerId
   if (rawStatus === "recommended" && !selectedPartnerId) {
     return { status: "error", message: "Select an active robotics partner before marking this fit as selected." }
   }
@@ -311,5 +332,3 @@ export async function reviewRoboticsInterest(
   revalidatePath("/dashboard/robotics-interest")
   return { status: "success", message: "Review saved." }
 }
-
-export const roboticsInterestInitialState = idleState
