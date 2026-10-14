@@ -51,15 +51,282 @@ export const solutionPartner = pgTable(
     contactEmail: text("contactEmail"),
     contactPhone: text("contactPhone"),
     active: boolean("active").notNull().default(true),
+    roboticsSourceStatus: text("roboticsSourceStatus").notNull().default("unverified"),
+    roboticsSourceType: text("roboticsSourceType").notNull().default("integrator"),
+    roboticsSourcePriority: integer("roboticsSourcePriority").notNull().default(100),
     createdByUserId: text("createdByUserId").notNull(),
     createdAt: timestamp("createdAt").notNull().defaultNow(),
     updatedAt: timestamp("updatedAt").notNull().defaultNow(),
   },
   (t) => ({
     orgActive: index("solution_partner_org_active_idx").on(t.organizationId, t.active),
+    orgRoboticsSource: index("solution_partner_org_robotics_source_idx").on(t.organizationId, t.roboticsSourceStatus, t.roboticsSourcePriority),
     validCategory: check("solution_partner_category_check", sql`${t.category} IN ('robotics', 'charging', 'both')`),
     capabilitiesArray: check("solution_partner_capabilities_check", sql`jsonb_typeof(${t.capabilities}) = 'array'`),
     coverageObject: check("solution_partner_coverage_check", sql`jsonb_typeof(${t.coverage}) = 'object'`),
+    validRoboticsSourceStatus: check("solution_partner_robotics_status_check", sql`${t.roboticsSourceStatus} IN ('unverified', 'paused', 'participating', 'full_partner')`),
+    validRoboticsSourceType: check("solution_partner_robotics_type_check", sql`${t.roboticsSourceType} IN ('manufacturer', 'distributor', 'retailer', 'rental', 'raas', 'integrator')`),
+    validRoboticsSourcePriority: check("solution_partner_robotics_priority_check", sql`${t.roboticsSourcePriority} >= 0`),
+  }),
+)
+
+export type RoboticsVerificationStatus = "verified" | "unverified" | "unknown"
+export type RoboticsSourceType = "manufacturer" | "distributor" | "retailer" | "rental" | "raas" | "integrator"
+export type RoboticsCollaborationStatus =
+  | "consent_pending"
+  | "selected"
+  | "shared"
+  | "source_response"
+  | "fit_confirmed"
+  | "fit_rejected"
+  | "pilot_planning"
+  | "pilot_in_progress"
+  | "pilot_completed"
+  | "deployment_planning"
+  | "deployment_in_progress"
+  | "deployment_completed"
+  | "closed"
+  | "owner_declined"
+  | "withdrawn"
+
+export type RoboticsMatchOffer = {
+  offeringId: string
+  partnerId: string
+  partnerName: string
+  sourceType: RoboticsSourceType
+  partnershipStatus: "full_partner" | "participating"
+  sourcePriority: number
+  availability: string
+  sourceUrl: string | null
+  lastVerifiedAt: string | null
+  matchReasons: string[]
+  unmetRequirements: string[]
+  unknownEvidence: string[]
+}
+
+export type RoboticsMatchCandidate = {
+  modelId: string
+  manufacturerName: string
+  modelName: string
+  category: string
+  eligible: boolean
+  fitScore: number
+  matchReasons: string[]
+  unmetRequirements: string[]
+  unknownEvidence: string[]
+  roboticsAssessmentEvidence: Array<{ keyPointId: string; points: number; explanation: string; evidence: string[]; confidence: string }>
+  offers: RoboticsMatchOffer[]
+}
+
+export type RoboticsRecommendationResults = {
+  outcome: "verified_fit" | "follow_up_required" | "no_verified_fit"
+  candidates: RoboticsMatchCandidate[]
+  summary: string
+  generatedAt: string
+}
+
+export type RoboticsConsentScope = {
+  providerName: string
+  modelName: string
+  includedFields: string[]
+  excludedFields: string[]
+  overrideReason: string | null
+}
+
+export type RoboticsSharedSnapshot = {
+  property: { name: string; city: string | null; region: string | null; country: string | null }
+  requirements: Record<string, unknown>
+  assessment: Record<string, unknown>
+  model: { manufacturerName: string; modelName: string; category: string; productUrl: string | null }
+  offering: { sourceName: string; sourceType: string; availability: string; sourceUrl: string | null }
+  preparedAt: string
+}
+
+export const roboticsManufacturer = pgTable(
+  "robotics_manufacturer",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    name: text("name").notNull(),
+    websiteUrl: text("websiteUrl"),
+    country: text("country"),
+    verificationStatus: text("verificationStatus").$type<RoboticsVerificationStatus>().notNull().default("unverified"),
+    lastVerifiedAt: timestamp("lastVerifiedAt"),
+    createdByUserId: text("createdByUserId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgName: index("robotics_manufacturer_org_name_idx").on(t.organizationId, t.name),
+    validStatus: check("robotics_manufacturer_status_check", sql`${t.verificationStatus} IN ('verified', 'unverified', 'unknown')`),
+  }),
+)
+
+export const roboticsModel = pgTable(
+  "robotics_model",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    manufacturerId: text("manufacturerId").notNull(),
+    name: text("name").notNull(),
+    category: text("category").notNull(),
+    description: text("description"),
+    productUrl: text("productUrl"),
+    commercialStatus: text("commercialStatus").notNull().default("unknown"),
+    verificationStatus: text("verificationStatus").$type<RoboticsVerificationStatus>().notNull().default("unverified"),
+    lastVerifiedAt: timestamp("lastVerifiedAt"),
+    createdByUserId: text("createdByUserId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgManufacturer: index("robotics_model_org_manufacturer_idx").on(t.organizationId, t.manufacturerId),
+    orgStatus: index("robotics_model_org_status_idx").on(t.organizationId, t.verificationStatus),
+    validCommercialStatus: check("robotics_model_commercial_status_check", sql`${t.commercialStatus} IN ('commercial', 'pilot', 'preorder', 'prototype', 'retired', 'unknown')`),
+    validStatus: check("robotics_model_status_check", sql`${t.verificationStatus} IN ('verified', 'unverified', 'unknown')`),
+  }),
+)
+
+export const roboticsModelCapability = pgTable(
+  "robotics_model_capability",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    modelId: text("modelId").notNull(),
+    capabilityKey: text("capabilityKey").notNull(),
+    capabilityValue: text("capabilityValue"),
+    evidenceUrl: text("evidenceUrl"),
+    evidenceTitle: text("evidenceTitle"),
+    verificationStatus: text("verificationStatus").$type<RoboticsVerificationStatus>().notNull().default("unknown"),
+    confidence: integer("confidence"),
+    lastVerifiedAt: timestamp("lastVerifiedAt"),
+    createdByUserId: text("createdByUserId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    modelStatus: index("robotics_model_capability_model_idx").on(t.organizationId, t.modelId, t.verificationStatus),
+    confidenceRange: check("robotics_model_capability_confidence_check", sql`${t.confidence} IS NULL OR ${t.confidence} BETWEEN 0 AND 100`),
+    verifiedEvidence: check("robotics_model_capability_verified_evidence_check", sql`${t.verificationStatus} <> 'verified' OR (${t.evidenceUrl} IS NOT NULL AND ${t.lastVerifiedAt} IS NOT NULL)`),
+  }),
+)
+
+export const roboticsSourceOffering = pgTable(
+  "robotics_source_offering",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    partnerId: text("partnerId").notNull(),
+    modelId: text("modelId").notNull(),
+    sourceType: text("sourceType").$type<RoboticsSourceType>().notNull(),
+    sourceUrl: text("sourceUrl"),
+    availability: text("availability").notNull().default("unknown"),
+    priceCents: integer("priceCents"),
+    priceCurrency: text("priceCurrency"),
+    priceBasis: text("priceBasis"),
+    pricingEvidenceUrl: text("pricingEvidenceUrl"),
+    verificationStatus: text("verificationStatus").$type<RoboticsVerificationStatus>().notNull().default("unverified"),
+    lastVerifiedAt: timestamp("lastVerifiedAt"),
+    createdByUserId: text("createdByUserId").notNull(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgModel: index("robotics_source_offering_org_model_idx").on(t.organizationId, t.modelId),
+    orgPartner: index("robotics_source_offering_org_partner_idx").on(t.organizationId, t.partnerId),
+    validSourceType: check("robotics_source_offering_type_check", sql`${t.sourceType} IN ('manufacturer', 'distributor', 'retailer', 'rental', 'raas', 'integrator')`),
+    validAvailability: check("robotics_source_offering_availability_check", sql`${t.availability} IN ('available', 'pilot', 'preorder', 'waitlist', 'unavailable', 'unknown')`),
+    validPrice: check("robotics_source_offering_price_check", sql`${t.priceCents} IS NULL OR ${t.priceCents} >= 0`),
+    validPriceBasis: check("robotics_source_offering_price_basis_check", sql`${t.priceBasis} IS NULL OR ${t.priceBasis} IN ('one_time', 'monthly', 'annual', 'quote')`),
+    validStatus: check("robotics_source_offering_status_check", sql`${t.verificationStatus} IN ('verified', 'unverified', 'unknown')`),
+    verifiedEvidence: check("robotics_source_offering_verified_evidence_check", sql`${t.verificationStatus} <> 'verified' OR (${t.sourceUrl} IS NOT NULL AND ${t.lastVerifiedAt} IS NOT NULL)`),
+  }),
+)
+
+export const roboticsRecommendationRun = pgTable(
+  "robotics_recommendation_run",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    interestId: text("interestId").notNull(),
+    assessmentId: text("assessmentId").notNull(),
+    assessmentVersion: integer("assessmentVersion").notNull(),
+    runNumber: integer("runNumber").notNull(),
+    status: text("status").notNull().default("current"),
+    reason: text("reason"),
+    interestSnapshot: jsonb("interestSnapshot").$type<Record<string, unknown>>().notNull(),
+    assessmentSnapshot: jsonb("assessmentSnapshot").$type<Record<string, unknown>>().notNull(),
+    results: jsonb("results").$type<RoboticsRecommendationResults>().notNull().default({ outcome: "no_verified_fit", candidates: [], summary: "", generatedAt: "" }),
+    createdByUserId: text("createdByUserId"),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    supersededAt: timestamp("supersededAt"),
+  },
+  (t) => ({
+    orgInterestCreated: index("robotics_recommendation_run_interest_created_idx").on(t.organizationId, t.interestId, t.createdAt),
+    interestRunNumber: unique().on(t.organizationId, t.interestId, t.runNumber),
+    validStatus: check("robotics_recommendation_run_status_check", sql`${t.status} IN ('current', 'superseded')`),
+    positiveRunNumber: check("robotics_recommendation_run_number_check", sql`${t.runNumber} > 0`),
+    snapshotsObject: check("robotics_recommendation_run_snapshots_check", sql`jsonb_typeof(${t.interestSnapshot}) = 'object' AND jsonb_typeof(${t.assessmentSnapshot}) = 'object' AND jsonb_typeof(${t.results}) = 'object'`),
+  }),
+)
+
+export const roboticsSourceCollaboration = pgTable(
+  "robotics_source_collaboration",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    interestId: text("interestId").notNull(),
+    recommendationRunId: text("recommendationRunId").notNull(),
+    assessmentId: text("assessmentId").notNull(),
+    modelId: text("modelId").notNull(),
+    offeringId: text("offeringId").notNull(),
+    partnerId: text("partnerId").notNull(),
+    status: text("status").$type<RoboticsCollaborationStatus>().notNull().default("consent_pending"),
+    consentScope: jsonb("consentScope").$type<RoboticsConsentScope>().notNull(),
+    ownerConsentAt: timestamp("ownerConsentAt"),
+    ownerConsentByUserId: text("ownerConsentByUserId"),
+    ownerConsentDecision: text("ownerConsentDecision"),
+    ownerConsentMethod: text("ownerConsentMethod"),
+    ownerConsentReference: text("ownerConsentReference"),
+    overrideBasis: text("overrideBasis"),
+    overrideReason: text("overrideReason"),
+    selectedByAdminUserId: text("selectedByAdminUserId").notNull(),
+    sharedAt: timestamp("sharedAt"),
+    sharedByUserId: text("sharedByUserId"),
+    shareMethod: text("shareMethod"),
+    shareReference: text("shareReference"),
+    sharedSnapshot: jsonb("sharedSnapshot").$type<RoboticsSharedSnapshot>(),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+    updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    orgInterest: index("robotics_source_collaboration_interest_idx").on(t.organizationId, t.interestId, t.createdAt),
+    orgPartnerStatus: index("robotics_source_collaboration_partner_idx").on(t.organizationId, t.partnerId, t.status),
+    validStatus: check("robotics_source_collaboration_status_check", sql`${t.status} IN ('consent_pending', 'selected', 'shared', 'source_response', 'fit_confirmed', 'fit_rejected', 'pilot_planning', 'pilot_in_progress', 'pilot_completed', 'deployment_planning', 'deployment_in_progress', 'deployment_completed', 'closed', 'owner_declined', 'withdrawn')`),
+    validConsentDecision: check("robotics_source_collaboration_consent_decision_check", sql`${t.ownerConsentDecision} IS NULL OR ${t.ownerConsentDecision} IN ('approved', 'declined')`),
+    approvedBeforeSelected: check("robotics_source_collaboration_consent_check", sql`${t.status} NOT IN ('selected', 'shared', 'source_response', 'fit_confirmed', 'fit_rejected', 'pilot_planning', 'pilot_in_progress', 'pilot_completed', 'deployment_planning', 'deployment_in_progress', 'deployment_completed', 'closed') OR (${t.ownerConsentAt} IS NOT NULL AND ${t.ownerConsentByUserId} IS NOT NULL AND ${t.ownerConsentDecision} = 'approved')`),
+    sharedBeforeProgress: check("robotics_source_collaboration_share_check", sql`${t.status} NOT IN ('shared', 'source_response', 'fit_confirmed', 'fit_rejected', 'pilot_planning', 'pilot_in_progress', 'pilot_completed', 'deployment_planning', 'deployment_in_progress', 'deployment_completed', 'closed') OR (${t.sharedAt} IS NOT NULL AND ${t.sharedByUserId} IS NOT NULL AND ${t.sharedSnapshot} IS NOT NULL)`),
+    scopeObject: check("robotics_source_collaboration_scope_check", sql`jsonb_typeof(${t.consentScope}) = 'object'`),
+  }),
+)
+
+export const roboticsSourceCollaborationEvent = pgTable(
+  "robotics_source_collaboration_event",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organizationId").notNull(),
+    collaborationId: text("collaborationId").notNull(),
+    eventType: text("eventType").notNull(),
+    actorType: text("actorType").notNull(),
+    actorUserId: text("actorUserId").notNull(),
+    note: text("note"),
+    detail: jsonb("detail").$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: timestamp("createdAt").notNull().defaultNow(),
+  },
+  (t) => ({
+    timeline: index("robotics_source_collaboration_event_timeline_idx").on(t.organizationId, t.collaborationId, t.createdAt),
+    validActor: check("robotics_source_collaboration_event_actor_check", sql`${t.actorType} IN ('admin', 'owner')`),
+    detailObject: check("robotics_source_collaboration_event_detail_check", sql`jsonb_typeof(${t.detail}) = 'object'`),
   }),
 )
 
