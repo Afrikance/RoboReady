@@ -331,6 +331,20 @@ async function stepFinalize(run: Run): Promise<void> {
   } catch (err) {
     console.log("[v0] syncListingFromAssessment failed:", (err as Error).message)
   }
+
+  try {
+    if (run.assessmentId) {
+      const { createLatestRoboticsRecommendationRun } = await import("@/lib/robotics-interest/recommendation-data")
+      await createLatestRoboticsRecommendationRun({
+        organizationId: run.organizationId,
+        propertyId: run.propertyId,
+        assessmentId: run.assessmentId,
+        createdByUserId: run.createdByUserId,
+      })
+    }
+  } catch (err) {
+    console.log("[v0] robotics recommendation refresh failed:", (err as Error).message)
+  }
 }
 
 /** Existence-based resume: decides the next action from persisted artifacts. */

@@ -94,7 +94,7 @@ export type RoboticsMatchOffer = {
   partnerId: string
   partnerName: string
   sourceType: RoboticsSourceType
-  partnershipStatus: "full_partner" | "participating"
+  partnershipStatus: "full_partner" | "participating" | "paused" | "unverified"
   sourcePriority: number
   availability: string
   sourceUrl: string | null
@@ -130,6 +130,7 @@ export type RoboticsConsentScope = {
   modelName: string
   includedFields: string[]
   excludedFields: string[]
+  overrideBasis: "partner_unable" | "owner_requested" | null
   overrideReason: string | null
 }
 

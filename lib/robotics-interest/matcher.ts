@@ -247,12 +247,20 @@ function matchOneOffer(
   else if (partner.roboticsSourceStatus === "participating") matchReasons.push("Participating-source priority applies only after the fit and evidence gates pass.")
   if (!dateIsCurrent(offer.lastVerifiedAt, now)) unknownEvidence.push("Offering evidence is missing or older than 12 months.")
 
+  const partnershipStatus = partner.roboticsSourceStatus === "full_partner"
+    ? "full_partner"
+    : partner.roboticsSourceStatus === "participating"
+      ? "participating"
+      : partner.roboticsSourceStatus === "paused"
+        ? "paused"
+        : "unverified"
+
   return {
     offeringId: offer.id,
     partnerId: partner.id,
     partnerName: partner.name,
     sourceType: offer.sourceType,
-    partnershipStatus: partner.roboticsSourceStatus === "full_partner" ? "full_partner" : "participating",
+    partnershipStatus,
     sourcePriority: partner.roboticsSourcePriority,
     availability: offer.availability,
     sourceUrl: offer.sourceUrl,
@@ -264,7 +272,9 @@ function matchOneOffer(
 }
 
 function offerOrder(left: RoboticsMatchOffer, right: RoboticsMatchOffer): number {
-  return Number(right.partnershipStatus === "full_partner") - Number(left.partnershipStatus === "full_partner")
+  const tier = (status: RoboticsMatchOffer["partnershipStatus"]) =>
+    status === "full_partner" ? 0 : status === "participating" ? 1 : status === "paused" ? 2 : 3
+  return tier(left.partnershipStatus) - tier(right.partnershipStatus)
     || left.sourcePriority - right.sourcePriority
     || left.partnerName.localeCompare(right.partnerName)
     || left.offeringId.localeCompare(right.offeringId)
@@ -280,9 +290,21 @@ export function rankRoboticsCatalog(input: {
   const requirements = requirementsFor(input.requirements)
   const evidence = assessmentEvidence(input.assessment)
   const candidateResults = input.models.map((model) => {
-    const offers = model.offers
-      .map((offer) => matchOneOffer(model, offer, requirements, input.requirements, now))
-      .sort(offerOrder)
+    const bySourceChannel = new Map<string, RoboticsMatchOffer>()
+    for (const offer of model.offers) {
+      const matched = matchOneOffer(model, offer, requirements, input.requirements, now)
+      const key = `${matched.partnerId}:${matched.sourceType}`
+      const current = bySourceChannel.get(key)
+      const currentEvidenceDate = current?.lastVerifiedAt ? new Date(current.lastVerifiedAt).getTime() : 0
+      const candidateEvidenceDate = matched.lastVerifiedAt ? new Date(matched.lastVerifiedAt).getTime() : 0
+      if (!current
+        || matched.unmetRequirements.length < current.unmetRequirements.length
+        || (matched.unmetRequirements.length === current.unmetRequirements.length && candidateEvidenceDate > currentEvidenceDate)
+        || (matched.unmetRequirements.length === current.unmetRequirements.length && candidateEvidenceDate === currentEvidenceDate && matched.offeringId.localeCompare(current.offeringId) < 0)) {
+        bySourceChannel.set(key, matched)
+      }
+    }
+    const offers = [...bySourceChannel.values()].sort(offerOrder)
     const eligibleOffers = offers.filter((offer) => offer.unmetRequirements.length === 0)
     const bestOffer = eligibleOffers[0] ?? offers[0]
     const unmatchedOffers = offers.filter((offer) => offer.unmetRequirements.length > 0)

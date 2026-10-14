@@ -94,7 +94,7 @@ CREATE TABLE "robotics_recommendation_run" (
   "reason" text,
   "interestSnapshot" jsonb NOT NULL,
   "assessmentSnapshot" jsonb NOT NULL,
-  "results" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "results" jsonb NOT NULL DEFAULT '{"outcome":"no_verified_fit","candidates":[],"summary":"","generatedAt":""}'::jsonb,
   "createdByUserId" text,
   "createdAt" timestamp without time zone NOT NULL DEFAULT now(),
   "supersededAt" timestamp without time zone,
