@@ -14,9 +14,9 @@ export default async function AirtableIntegrationPage() {
     <main className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
         <p className="text-xs font-medium uppercase tracking-widest text-primary">Integrations</p>
-        <h1 className="text-2xl font-semibold tracking-tight text-balance">Airtable Connect</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-balance">Airtable CRM schema</h1>
         <p className="max-w-2xl text-sm leading-relaxed text-muted-foreground text-pretty">
-          Check that this project can obtain its shared Airtable credential through Vercel Connect. The credential stays server-side.
+          Inspect the RoboReady/Humanoid Robotics CRM fields before using its Tier 1 records in robotics sourcing. This check is read-only.
         </p>
       </header>
       <AirtableConnectStatus />

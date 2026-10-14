@@ -14,6 +14,13 @@ import {
 type AirtableStatus = {
   connected: true
   scope: "app"
+  baseName: string
+  base: { id: string; name: string } | null
+  tables: Array<{
+    id: string
+    name: string
+    fields: Array<{ id: string; name: string; type: string; choices: string[] }>
+  }>
   message: string
 }
 
@@ -23,9 +30,11 @@ async function checkAirtableStatus(url: string): Promise<AirtableStatus> {
 
   if (!response.ok || !body?.connected) {
     throw new Error(
-      body?.error === "connector_unavailable"
-        ? "Vercel Connect could not provide the Airtable credential."
-        : "Unable to check Airtable Connect status.",
+      body?.error === "schema_scope_missing"
+        ? "The Airtable connector credential does not have the schema.bases:read permission required for this read-only schema check."
+        : body?.error === "connector_unavailable"
+          ? "Vercel Connect or Airtable could not complete the read-only schema check."
+          : "Unable to check Airtable Connect status.",
     )
   }
 
@@ -51,12 +60,36 @@ export function AirtableConnectStatus() {
       </CardHeader>
       <CardContent className="flex flex-col items-start gap-4">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          The status check retrieves the credential on the server and never sends the token to your browser. It does not read or write Airtable records.
+          The server reads only the base and field schema for the named CRM, using an app-scoped token. It never sends the token to the browser and does not read or change CRM records.
         </p>
         {data ? (
-          <div className="flex items-start gap-2 text-sm text-foreground" role="status">
-            <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
-            <span>{data.message}</span>
+          <div className="flex flex-col gap-4" role="status">
+            <div className="flex items-start gap-2 text-sm text-foreground">
+              <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
+              <span>{data.message}</span>
+            </div>
+            {data.base && data.tables.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                {data.tables.map((table) => (
+                  <section key={table.id} className="flex flex-col gap-2 rounded-md border p-4">
+                    <h3 className="text-sm font-semibold">{table.name}</h3>
+                    <ul className="flex flex-col gap-2">
+                      {table.fields.map((field) => (
+                        <li key={field.id} className="flex flex-wrap items-start gap-x-2 text-sm">
+                          <span className="font-medium">{field.name}</span>
+                          <span className="text-muted-foreground">{field.type}</span>
+                          {field.choices.length > 0 ? (
+                            <span className="w-full text-xs leading-relaxed text-muted-foreground">
+                              Options: {field.choices.join(", ")}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
         {error ? (
