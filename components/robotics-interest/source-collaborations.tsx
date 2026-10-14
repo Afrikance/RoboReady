@@ -9,7 +9,7 @@ import {
   updateRoboticsSourceCollaboration,
 } from '@/app/actions/robotics-collaboration'
 import type { getRoboticsInterestReviewData } from '@/app/actions/robotics-interest'
-import { getRoboticsCollaborationNextStatuses } from '@/lib/robotics-interest/collaboration'
+import { getNextRoboticsCollaborationStatuses } from '@/lib/robotics-interest/collaboration'
 import type { RoboticsCollaborationStatus } from '@/lib/db/schema'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -152,7 +152,7 @@ export function RoboticsSourceCollaborations({ request }: { request: InterestReq
         <div className="flex flex-col gap-3 border-t pt-4">
           <h4 className="text-sm font-medium">Per-source collaboration timeline</h4>
           {collaborations.map((collaboration) => {
-            const nextStatuses = getRoboticsCollaborationNextStatuses(collaboration.status)
+            const nextStatuses = getNextRoboticsCollaborationStatuses(collaboration.status)
             return (
               <Card key={collaboration.id}>
                 <CardHeader className="pb-3">

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { CheckCircle2, ClipboardList, MapPin, RefreshCw, ShieldAlert } from 'lucide-react'
 import { reviewRoboticsInterest, type RoboticsInterestActionState } from '@/app/actions/robotics-interest'
 import { refreshRoboticsRecommendation } from '@/app/actions/robotics-sourcing'
+import { AdminRoboticsCollaborationPanel } from '@/components/robotics-interest/collaboration-panels'
 import { toast } from 'sonner'
 import { ROBOTICS_TASKS, ROBOTICS_USE_CASES, roboticsInterestStatusLabel, type RoboticsInterestStatus } from '@/lib/robotics-interest/core'
 import type { getRoboticsInterestReviewData } from '@/app/actions/robotics-interest'
@@ -124,6 +125,7 @@ function ReviewRequestCard({ request, partners }: { request: InterestRequest; pa
         </section>
 
         <RecommendationPanel request={request} />
+        <AdminRoboticsCollaborationPanel request={request} />
 
         <section className="grid gap-2 rounded-lg border p-4 sm:grid-cols-2">
           <div>

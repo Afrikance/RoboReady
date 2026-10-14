@@ -192,6 +192,7 @@ export async function getCustomerRoboticsCollaborationRequests(propertyId: strin
     scope: collaboration.consentScope,
     overrideReason: collaboration.overrideReason,
     ownerConsentDecision: collaboration.ownerConsentDecision,
+    sharedSnapshot: collaboration.sharedSnapshot as RoboticsSharedSnapshot | null,
     createdAt: collaboration.createdAt.toISOString(),
     ownerConsentAt: collaboration.ownerConsentAt?.toISOString() ?? null,
     sharedAt: collaboration.sharedAt?.toISOString() ?? null,
