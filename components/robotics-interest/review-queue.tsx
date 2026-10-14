@@ -1,8 +1,12 @@
 'use client'
 
-import { useActionState } from 'react'
-import { CheckCircle2, ClipboardList, MapPin } from 'lucide-react'
+import { useActionState, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
+import { CheckCircle2, ClipboardList, MapPin, RefreshCw, ShieldAlert } from 'lucide-react'
 import { reviewRoboticsInterest, type RoboticsInterestActionState } from '@/app/actions/robotics-interest'
+import { refreshRoboticsRecommendation } from '@/app/actions/robotics-sourcing'
+import { AdminRoboticsCollaborationPanel } from '@/components/robotics-interest/collaboration-panels'
+import { toast } from 'sonner'
 import { ROBOTICS_TASKS, ROBOTICS_USE_CASES, roboticsInterestStatusLabel, type RoboticsInterestStatus } from '@/lib/robotics-interest/core'
 import type { getRoboticsInterestReviewData } from '@/app/actions/robotics-interest'
 import { Badge } from '@/components/ui/badge'
@@ -78,9 +82,7 @@ function ReviewRequestCard({ request, partners }: { request: InterestRequest; pa
               {request.address || 'Property address not provided'}
             </CardDescription>
           </div>
-          <Badge variant={request.status === 'recommended' ? 'default' : 'secondary'}>
-            {roboticsInterestStatusLabel(request.status)}
-          </Badge>
+          <Badge variant={request.status === 'recommended' ? 'default' : 'secondary'}>{roboticsInterestStatusLabel(request.status)}</Badge>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-6">
@@ -107,29 +109,23 @@ function ReviewRequestCard({ request, partners }: { request: InterestRequest; pa
 
         <section className="flex flex-col gap-3 rounded-lg border bg-muted/20 p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold">Internal match review</h3>
+            <h3 className="text-sm font-semibold">Preliminary partner-tag overlap</h3>
             <span className="text-xs text-muted-foreground">Submitted {new Date(request.submittedAt).toLocaleString()}</span>
           </div>
-          {request.recommendations.length > 0 ? (
+          {request.recommendations.length ? (
             <ul className="flex flex-col gap-3">
               {request.recommendations.map((recommendation) => (
                 <li key={recommendation.partnerId} className="border-l-2 border-primary/30 pl-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-medium">{recommendation.partnerName}</p>
-                    <Badge variant="outline">{recommendation.tagCoverage}% tag coverage</Badge>
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-                    {recommendation.reasons.join(' ')}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2"><p className="text-sm font-medium">{recommendation.partnerName}</p><Badge variant="outline">{recommendation.tagCoverage}% tag coverage</Badge></div>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{recommendation.reasons.join(' ')}</p>
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="text-sm leading-relaxed text-muted-foreground">
-              No eligible catalog match was found. Review manually; do not present an unverified partner fit as a recommendation.
-            </p>
-          )}
+          ) : <p className="text-sm leading-relaxed text-muted-foreground">No preliminary partner capability-tag overlap was found. This legacy signal is not a model-level fit recommendation.</p>}
         </section>
+
+        <RecommendationPanel request={request} />
+        <AdminRoboticsCollaborationPanel request={request} />
 
         <section className="grid gap-2 rounded-lg border p-4 sm:grid-cols-2">
           <div>
@@ -140,25 +136,19 @@ function ReviewRequestCard({ request, partners }: { request: InterestRequest; pa
           </div>
           <div>
             <p className="text-sm font-medium">Preferred follow-up: {request.contactPreference === 'phone' ? 'Phone' : 'Email'}</p>
-            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-              RoboReady contact consent was recorded {request.contactConsentAt ? new Date(request.contactConsentAt).toLocaleString() : 'with this request'}. This is not consent to share details or create a partner referral.
-            </p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">RoboReady contact consent was recorded {request.contactConsentAt ? new Date(request.contactConsentAt).toLocaleString() : 'with this request'}. This is not consent to share details or create a partner referral.</p>
           </div>
         </section>
 
         <form action={formAction} className="flex flex-col gap-4 border-t pt-5">
-          {state.status === 'success' ? (
-            <p role="status" className="flex items-center gap-2 text-sm text-primary"><CheckCircle2 className="size-4" aria-hidden="true" />{state.message}</p>
-          ) : null}
+          {state.status === 'success' ? <p role="status" className="flex items-center gap-2 text-sm text-primary"><CheckCircle2 className="size-4" aria-hidden="true" />{state.message}</p> : null}
           {state.status === 'error' ? <p role="alert" className="text-sm text-destructive">{state.message}</p> : null}
           <FieldGroup className="grid gap-4 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor={`partner-${request.id}`}>Selected solution partner</FieldLabel>
               <select id={`partner-${request.id}`} name="selectedPartnerId" className={selectClassName} defaultValue={initialPartnerId} disabled={pending}>
                 <option value="">No selection / manual follow-up</option>
-                {partners.map((partner) => (
-                  <option key={partner.id} value={partner.id}>{partner.name}</option>
-                ))}
+                {partners.map((partner) => <option key={partner.id} value={partner.id}>{partner.name}</option>)}
               </select>
               <FieldDescription>Only active robotics-capable partners in this organization are selectable.</FieldDescription>
             </Field>
@@ -174,9 +164,7 @@ function ReviewRequestCard({ request, partners }: { request: InterestRequest; pa
             </Field>
           </FieldGroup>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">
-              Selecting a fit is an internal review decision only. Partner referrals still require the separate consent workflow.
-            </p>
+            <p className="max-w-xl text-xs leading-relaxed text-muted-foreground">Selecting a fit is an internal review decision only. Partner referrals still require the separate consent workflow.</p>
             <Button type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save review'}</Button>
           </div>
         </form>
@@ -184,3 +172,110 @@ function ReviewRequestCard({ request, partners }: { request: InterestRequest; pa
     </Card>
   )
 }
+
+function RecommendationPanel({ request }: { request: InterestRequest }) {
+  const [reason, setReason] = useState('Admin review')
+  const [pending, startTransition] = useTransition()
+  const router = useRouter()
+  const recommendation = request.recommendationRun
+
+  function rerun() {
+    if (!reason.trim()) {
+      toast.error('Add a reason for this rerun.')
+      return
+    }
+    startTransition(async () => {
+      const result = await refreshRoboticsRecommendation(request.id, reason.trim())
+      if (!result.ok) {
+        toast.error(result.error)
+        return
+      }
+      toast.success('Recommendations refreshed from the current catalog and assessment.')
+      router.refresh()
+    })
+  }
+
+  return (
+    <section className="flex flex-col gap-4 rounded-lg border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-sm font-semibold">Assessment-linked robot and cobot fit</h3>
+          <p className="text-xs leading-relaxed text-muted-foreground">Deterministic gates use current catalog evidence, operating requirements, source eligibility, coverage, availability, and verified budget facts. Partnership tier never overrides fit.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {recommendation ? <Badge variant={recommendation.results.outcome === 'verified_fit' ? 'default' : 'secondary'}>{recommendation.results.outcome.replaceAll('_', ' ')}</Badge> : <Badge variant="outline">Not generated</Badge>}
+          <span className="text-xs text-muted-foreground">{recommendation ? `Run ${recommendation.runNumber} · Assessment v${recommendation.assessmentVersion}` : 'Waiting for a completed assessment'}</span>
+        </div>
+      </div>
+
+      {recommendation ? (
+        <>
+          <p className="text-sm leading-relaxed">{recommendation.results.summary}</p>
+          <p className="text-xs text-muted-foreground">Generated {new Date(recommendation.createdAt).toLocaleString()} · Results are Admin review aids; no source has been contacted.</p>
+          {recommendation.results.candidates.length ? (
+            <div className="flex flex-col gap-3">
+              {recommendation.results.candidates.map((candidate) => (
+                <article key={candidate.modelId} className="flex flex-col gap-3 rounded-md border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <h4 className="font-semibold">{candidate.manufacturerName} · {candidate.modelName}</h4>
+                      <p className="text-xs text-muted-foreground">{candidate.category} · {candidate.fitScore}% of documented capability requirements covered</p>
+                    </div>
+                    <Badge variant={candidate.eligible ? 'default' : 'outline'}>{candidate.eligible ? 'Passed all gates' : 'Follow-up only'}</Badge>
+                  </div>
+                  {candidate.offers.length ? (
+                    <div className="flex flex-col gap-2">
+                      {candidate.offers.map((offer) => (
+                        <div key={offer.offeringId} className="rounded-md bg-muted/30 p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-medium">{offer.partnerName}</span>
+                            <Badge variant={offer.partnershipStatus === 'full_partner' ? 'default' : 'outline'}>{offer.partnershipStatus.replaceAll('_', ' ')}</Badge>
+                            <Badge variant="secondary">{offer.sourceType}</Badge>
+                            <span className="text-xs text-muted-foreground">Priority {offer.sourcePriority} · {offer.availability}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">Last verified: {offer.lastVerifiedAt ? new Date(offer.lastVerifiedAt).toLocaleDateString() : 'unknown'}</p>
+                          {offer.sourceUrl ? <a href={offer.sourceUrl} target="_blank" rel="noreferrer" className="mt-1 inline-block text-xs text-primary underline underline-offset-4">Source evidence</a> : null}
+                          {offer.matchReasons.length ? <p className="mt-2 text-xs leading-relaxed">{offer.matchReasons.join(' ')}</p> : null}
+                          {offer.unmetRequirements.length ? <p className="mt-2 text-xs leading-relaxed text-destructive">Needs follow-up: {offer.unmetRequirements.join(' ')}</p> : null}
+                          {offer.unknownEvidence.length ? <p className="mt-1 text-xs leading-relaxed text-muted-foreground">Unknown evidence: {offer.unknownEvidence.join(' ')}</p> : null}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-xs text-muted-foreground">No supplier channel is attached to this catalog model.</p>}
+                  {candidate.roboticsAssessmentEvidence.length ? (
+                    <details className="rounded-md border p-3">
+                      <summary className="cursor-pointer text-xs font-medium">Robotics-specific assessment evidence ({candidate.roboticsAssessmentEvidence.length})</summary>
+                      <ul className="mt-2 flex flex-col gap-2">
+                        {candidate.roboticsAssessmentEvidence.map((item) => (
+                          <li key={item.keyPointId} className="text-xs leading-relaxed">
+                            <span className="font-medium">{item.keyPointId} · {item.points} points · {item.confidence} confidence</span>
+                            {item.explanation ? <p className="text-muted-foreground">{item.explanation}</p> : null}
+                            {item.evidence.length ? <p className="text-muted-foreground">{item.evidence.join(' · ')}</p> : null}
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <p className="text-sm leading-relaxed text-muted-foreground">Recommendations are generated when the property assessment is complete and an open robotics-interest request exists.</p>
+      )}
+
+      <div className="flex flex-col gap-3 border-t pt-4 sm:flex-row sm:items-end sm:justify-between">
+        <label className="flex w-full max-w-md flex-col gap-1 text-xs font-medium">
+          Rerun reason
+          <input value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} className={selectClassName} />
+        </label>
+        <Button type="button" variant="outline" onClick={rerun} disabled={pending || request.status === 'closed'}>
+          <RefreshCw data-icon="inline-start" />{pending ? 'Refreshing…' : 'Refresh recommendations'}
+        </Button>
+      </div>
+      <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground"><ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden="true" />A fit result does not share customer details, send a referral, or guarantee pricing, availability, compliance, or deployment readiness.</p>
+    </section>
+  )
+}
+

@@ -1,10 +1,10 @@
 "use server"
 
-import { and, desc, eq } from "drizzle-orm"
+import { and, desc, eq, inArray } from "drizzle-orm"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
 import { db } from "@/lib/db"
-import { property, roboticsInterest, solutionPartner, type RoboticsInterestRecommendation } from "@/lib/db/schema"
+import { property, roboticsInterest, roboticsRecommendationRun, roboticsSourceCollaboration, roboticsSourceCollaborationEvent, solutionPartner, type RoboticsInterestRecommendation } from "@/lib/db/schema"
 import { isAdminRole } from "@/lib/access"
 import { getAuthorizedProperty, getOrgContext, isClient, recordAudit } from "@/lib/tenancy"
 import {
@@ -199,7 +199,7 @@ export async function getRoboticsInterestReviewData() {
   const ctx = await getOrgContext()
   if (!ctx || !isAdminRole(ctx.role)) return null
 
-  const [rows, partnerRows] = await Promise.all([
+  const [rows, partnerRows, recommendationRows, collaborationRows] = await Promise.all([
     db
       .select({
         interest: roboticsInterest,
@@ -222,7 +222,32 @@ export async function getRoboticsInterestReviewData() {
       .select()
       .from(solutionPartner)
       .where(and(eq(solutionPartner.organizationId, ctx.organizationId), eq(solutionPartner.active, true))),
+    db
+      .select()
+      .from(roboticsRecommendationRun)
+      .where(and(eq(roboticsRecommendationRun.organizationId, ctx.organizationId), eq(roboticsRecommendationRun.status, "current")))
+      .orderBy(desc(roboticsRecommendationRun.runNumber)),
+    db
+      .select()
+      .from(roboticsSourceCollaboration)
+      .where(eq(roboticsSourceCollaboration.organizationId, ctx.organizationId))
+      .orderBy(desc(roboticsSourceCollaboration.createdAt)),
   ])
+  const currentRunByInterest = new Map<string, (typeof recommendationRows)[number]>()
+  for (const run of recommendationRows) {
+    if (!currentRunByInterest.has(run.interestId)) currentRunByInterest.set(run.interestId, run)
+  }
+  const collaborationIds = collaborationRows.map((collaboration) => collaboration.id)
+  const eventRows = collaborationIds.length
+    ? await db.select().from(roboticsSourceCollaborationEvent).where(and(
+      eq(roboticsSourceCollaborationEvent.organizationId, ctx.organizationId),
+      inArray(roboticsSourceCollaborationEvent.collaborationId, collaborationIds),
+    )).orderBy(desc(roboticsSourceCollaborationEvent.createdAt))
+    : []
+  const eventsByCollaboration = new Map<string, typeof eventRows>()
+  for (const event of eventRows) eventsByCollaboration.set(event.collaborationId, [...(eventsByCollaboration.get(event.collaborationId) ?? []), event])
+  const collaborationsByInterest = new Map<string, typeof collaborationRows>()
+  for (const collaboration of collaborationRows) collaborationsByInterest.set(collaboration.interestId, [...(collaborationsByInterest.get(collaboration.interestId) ?? []), collaboration])
 
   return {
     requests: rows.map(({ interest, propertyName, addressLine1, city, region, country, selectedPartnerName }) => ({
@@ -250,6 +275,11 @@ export async function getRoboticsInterestReviewData() {
       recommendations: interest.recommendations as RoboticsInterestRecommendation[],
       selectedPartnerId: interest.selectedPartnerId,
       selectedPartnerName,
+      recommendationRun: currentRunByInterest.get(interest.id) ?? null,
+      sourceCollaborations: (collaborationsByInterest.get(interest.id) ?? []).map((collaboration) => ({
+        ...collaboration,
+        events: eventsByCollaboration.get(collaboration.id) ?? [],
+      })),
       reviewNotes: interest.reviewNotes,
       submittedAt: interest.submittedAt.toISOString(),
     })),

@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings, DatabaseZap, ClipboardList, BadgeCheck, LifeBuoy, ShieldCheck, MapPinned, Radar, Newspaper, Handshake } from "lucide-react"
+import { LayoutDashboard, Building2, Bot, FileText, Users, Contact, Settings, Database, DatabaseZap, ClipboardList, BadgeCheck, LifeBuoy, ShieldCheck, MapPinned, Radar, Newspaper, Handshake } from "lucide-react"
 import { canUseNavHref } from "@/lib/access"
 import type { Role } from "@/lib/tenancy"
 
@@ -22,6 +22,7 @@ const NAV = [
   { href: "/dashboard/cyber-fleet", label: "Cyber Fleet", icon: ShieldCheck },
   { href: "/dashboard/partners", label: "Solution Partners", icon: Handshake },
   { href: "/dashboard/robotics-interest", label: "Robotics Interest", icon: Bot, exact: true },
+  { href: "/dashboard/integrations/airtable", label: "Airtable Connect", icon: Database },
   { href: "/dashboard/support", label: "Support", icon: LifeBuoy },
   { href: "/dashboard/team", label: "Team", icon: Users },
   { href: "/dashboard/settings", label: "Settings", icon: Settings },
