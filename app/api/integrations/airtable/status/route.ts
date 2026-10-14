@@ -1,4 +1,4 @@
-import { AirtableApiError, getRoboticsCrmSchema, ROBOTICS_CRM_BASE_NAME } from "@/lib/integrations/airtable"
+import { AirtableApiError, getRoboticsCrmSnapshot, ROBOTICS_CRM_BASE_NAME } from "@/lib/integrations/airtable"
 import { isAdminRole } from "@/lib/access"
 import { getOrgContext } from "@/lib/tenancy"
 
@@ -17,22 +17,28 @@ export async function GET() {
   }
 
   try {
-    const schema = await getRoboticsCrmSchema()
+    const snapshot = await getRoboticsCrmSnapshot()
     return Response.json(
       {
         connected: true,
         scope: "app",
         baseName: ROBOTICS_CRM_BASE_NAME,
-        base: schema.base,
-        tables: schema.tables,
-        message: schema.base
-          ? `Read-only schema loaded from ${schema.base.name}. No Airtable records were read or changed.`
+        base: snapshot.base,
+        tierOneRecords: snapshot.tierOneRecords,
+        scanComplete: snapshot.scanComplete,
+        message: snapshot.base
+          ? `Found ${snapshot.tierOneRecords.length} CRM record(s) with a distinct Tier 1 label in Notes. No records were changed.`
           : `The Airtable credential works, but the exact base “${ROBOTICS_CRM_BASE_NAME}” was not found in its accessible bases.`,
       },
       { headers: noStoreHeaders },
     )
   } catch (error) {
-    const code = error instanceof AirtableApiError && error.status === 403 ? "schema_scope_missing" : "connector_unavailable"
+    const code =
+      error instanceof AirtableApiError && error.status === 403
+        ? error.resource === "records"
+          ? "records_scope_missing"
+          : "schema_scope_missing"
+        : "connector_unavailable"
     return Response.json(
       { connected: false, error: code },
       { status: 503, headers: noStoreHeaders },

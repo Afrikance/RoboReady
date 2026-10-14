@@ -16,11 +16,13 @@ type AirtableStatus = {
   scope: "app"
   baseName: string
   base: { id: string; name: string } | null
-  tables: Array<{
+  tierOneRecords: Array<{
     id: string
-    name: string
-    fields: Array<{ id: string; name: string; type: string; choices: string[] }>
+    tableId: string
+    tableName: string
+    fields: Record<string, string>
   }>
+  scanComplete: boolean
   message: string
 }
 
@@ -31,10 +33,12 @@ async function checkAirtableStatus(url: string): Promise<AirtableStatus> {
   if (!response.ok || !body?.connected) {
     throw new Error(
       body?.error === "schema_scope_missing"
-        ? "The Airtable connector credential does not have the schema.bases:read permission required for this read-only schema check."
-        : body?.error === "connector_unavailable"
-          ? "Vercel Connect or Airtable could not complete the read-only schema check."
-          : "Unable to check Airtable Connect status.",
+        ? "The Airtable connector credential needs schema.bases:read to inspect the base structure."
+        : body?.error === "records_scope_missing"
+          ? "The Airtable connector credential needs data.records:read to find Tier 1 records."
+          : body?.error === "connector_unavailable"
+            ? "Vercel Connect or Airtable could not complete the read-only CRM query."
+            : "Unable to check Airtable Connect status.",
     )
   }
 
@@ -60,7 +64,7 @@ export function AirtableConnectStatus() {
       </CardHeader>
       <CardContent className="flex flex-col items-start gap-4">
         <p className="text-sm leading-relaxed text-muted-foreground">
-          The server reads only the base and field schema for the named CRM, using an app-scoped token. It never sends the token to the browser and does not read or change CRM records.
+          The server searches only tables with a Notes field for a distinct “Tier 1” label. It returns non-contact CRM fields to admins; the token and Notes contents stay server-side. The query never changes Airtable records.
         </p>
         {data ? (
           <div className="flex flex-col gap-4" role="status">
@@ -68,26 +72,41 @@ export function AirtableConnectStatus() {
               <Check aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-primary" />
               <span>{data.message}</span>
             </div>
-            {data.base && data.tables.length > 0 ? (
+            {data.base ? (
               <div className="flex flex-col gap-3">
-                {data.tables.map((table) => (
-                  <section key={table.id} className="flex flex-col gap-2 rounded-md border p-4">
-                    <h3 className="text-sm font-semibold">{table.name}</h3>
-                    <ul className="flex flex-col gap-2">
-                      {table.fields.map((field) => (
-                        <li key={field.id} className="flex flex-wrap items-start gap-x-2 text-sm">
-                          <span className="font-medium">{field.name}</span>
-                          <span className="text-muted-foreground">{field.type}</span>
-                          {field.choices.length > 0 ? (
-                            <span className="w-full text-xs leading-relaxed text-muted-foreground">
-                              Options: {field.choices.join(", ")}
-                            </span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </section>
-                ))}
+                <div className="flex flex-col gap-1">
+                  <h3 className="text-sm font-semibold">Tier 1 CRM records</h3>
+                  {!data.scanComplete ? (
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Scan reached its per-table safety limit. Results may be incomplete.
+                    </p>
+                  ) : null}
+                </div>
+                {data.tierOneRecords.length > 0 ? (
+                  <ul className="flex flex-col gap-3">
+                    {data.tierOneRecords.map((record) => (
+                      <li key={`${record.tableId}-${record.id}`} className="flex flex-col gap-2 rounded-md border p-4">
+                        <h4 className="text-sm font-semibold">{record.tableName}</h4>
+                        {Object.keys(record.fields).length > 0 ? (
+                          <dl className="flex flex-col gap-2">
+                            {Object.entries(record.fields).map(([name, value]) => (
+                              <div key={name} className="flex flex-col gap-1 text-sm sm:flex-row sm:gap-3">
+                                <dt className="font-medium">{name}</dt>
+                                <dd className="min-w-0 break-words text-muted-foreground">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : (
+                          <p className="text-sm leading-relaxed text-muted-foreground">No display-safe fields found.</p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="rounded-md border p-4 text-sm leading-relaxed text-muted-foreground">
+                    No records contain “Tier 1” in the Notes field.
+                  </p>
+                )}
               </div>
             ) : null}
           </div>
@@ -100,7 +119,7 @@ export function AirtableConnectStatus() {
         ) : null}
         <Button type="button" disabled={isMutating} onClick={() => void trigger()}>
           {isMutating ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : null}
-          {isMutating ? "Checking connection…" : "Check connection"}
+          {isMutating ? "Searching Airtable…" : "Find Tier 1 records"}
         </Button>
       </CardContent>
     </Card>

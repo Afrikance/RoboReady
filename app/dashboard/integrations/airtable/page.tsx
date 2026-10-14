@@ -3,7 +3,7 @@ import { AirtableConnectStatus } from "@/components/integrations/airtable-connec
 import { isAdminRole } from "@/lib/access"
 import { getOrgContext } from "@/lib/tenancy"
 
-export const metadata = { title: "Airtable Connect" }
+export const metadata = { title: "Airtable Tier 1 CRM" }
 
 export default async function AirtableIntegrationPage() {
   const ctx = await getOrgContext()
