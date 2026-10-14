@@ -45,6 +45,7 @@ export async function createRoboticsSourceCollaboration(input: unknown): Promise
     interestId: z.string().min(1).max(100),
     modelId: z.string().min(1).max(100),
     offeringId: z.string().min(1).max(100),
+    overrideBasis: z.enum(['partner_unable', 'owner_requested']).nullable().optional().default(null),
     overrideReason: z.string().trim().max(500).optional().default(''),
   }).safeParse(input)
   if (!parsed.success) return formResult(parsed.error.issues[0]?.message ?? 'Choose a valid candidate and source.')
@@ -100,10 +101,19 @@ export async function createRoboticsSourceCollaboration(input: unknown): Promise
   const existingPartnerIds = new Set(applicablePartnerships.map((row) => row.partnerId))
   const needsOverride = existingPartnerIds.size > 0 && !existingPartnerIds.has(partner.id)
   const overrideReason = parsed.data.overrideReason.trim()
-  if (needsOverride && overrideReason.length < 12) {
+  if (needsOverride && (!parsed.data.overrideBasis || overrideReason.length < 12)) {
     const names = applicablePartnerships.map((row) => row.name).filter(Boolean).join(', ')
-    return formResult(`An active robotics partnership already exists${names ? ` with ${names}` : ''}. Record why that partner cannot meet the need before proposing another source.`)
+    return formResult(`An active robotics partnership already exists${names ? ` with ${names}` : ''}. Select whether the partner cannot meet the documented need or the owner requested an alternative, and record the reason.`)
   }
+
+  const activeCollaborationStatuses: RoboticsCollaborationStatus[] = ['consent_pending', 'selected', 'shared', 'source_response', 'fit_confirmed', 'fit_rejected', 'pilot_planning', 'pilot_in_progress', 'pilot_completed', 'deployment_planning', 'deployment_in_progress', 'deployment_completed']
+  const [existingCollaboration] = await db.select({ id: roboticsSourceCollaboration.id }).from(roboticsSourceCollaboration).where(and(
+    eq(roboticsSourceCollaboration.organizationId, context.organizationId),
+    eq(roboticsSourceCollaboration.interestId, interest.id),
+    eq(roboticsSourceCollaboration.offeringId, offering.id),
+    inArray(roboticsSourceCollaboration.status, activeCollaborationStatuses),
+  )).limit(1)
+  if (existingCollaboration) return formResult('This source already has an active collaboration for the request. Update its timeline instead of duplicating it.')
 
   const recommendation = await createRoboticsRecommendationRun({
     organizationId: context.organizationId,
@@ -119,6 +129,7 @@ export async function createRoboticsSourceCollaboration(input: unknown): Promise
   const consentScope = createRoboticsConsentScope({
     partnerName: partner.name,
     modelName: model.name,
+    overrideBasis: needsOverride ? parsed.data.overrideBasis : null,
     overrideReason: needsOverride ? overrideReason : null,
   })
   const id = crypto.randomUUID()
@@ -136,7 +147,7 @@ export async function createRoboticsSourceCollaboration(input: unknown): Promise
       status: 'consent_pending',
       consentScope,
       selectedByAdminUserId: context.user.id,
-      overrideBasis: needsOverride ? 'partner_unable' : null,
+      overrideBasis: needsOverride ? parsed.data.overrideBasis : null,
       overrideReason: needsOverride ? overrideReason : null,
       createdAt: now,
       updatedAt: now,
@@ -153,7 +164,7 @@ export async function createRoboticsSourceCollaboration(input: unknown): Promise
       createdAt: now,
     })
   })
-  await recordAudit({ organizationId: context.organizationId, userId: context.user.id, action: 'robotics_collaboration.consent_requested', entityType: 'robotics_source_collaboration', entityId: id, metadata: { interestId: interest.id, partnerId: partner.id, modelId: model.id, offeringId: offering.id, overrideBasis: needsOverride ? 'partner_unable' : null } })
+  await recordAudit({ organizationId: context.organizationId, userId: context.user.id, action: 'robotics_collaboration.consent_requested', entityType: 'robotics_source_collaboration', entityId: id, metadata: { interestId: interest.id, partnerId: partner.id, modelId: model.id, offeringId: offering.id, overrideBasis: needsOverride ? parsed.data.overrideBasis : null } })
   refreshCollaborationViews(propertyRow.id)
   return { ok: true, id }
 }
@@ -173,14 +184,17 @@ export async function getCustomerRoboticsCollaborationRequests(propertyId: strin
       eq(roboticsSourceCollaboration.organizationId, context.organizationId),
       eq(roboticsInterest.propertyId, propertyRow.id),
       eq(roboticsInterest.createdByUserId, context.user.id),
-      eq(roboticsSourceCollaboration.status, 'consent_pending'),
     ))
     .orderBy(desc(roboticsSourceCollaboration.createdAt))
   return rows.map(({ collaboration }) => ({
     id: collaboration.id,
+    status: collaboration.status,
     scope: collaboration.consentScope,
     overrideReason: collaboration.overrideReason,
+    ownerConsentDecision: collaboration.ownerConsentDecision,
     createdAt: collaboration.createdAt.toISOString(),
+    ownerConsentAt: collaboration.ownerConsentAt?.toISOString() ?? null,
+    sharedAt: collaboration.sharedAt?.toISOString() ?? null,
   }))
 }
 
@@ -323,26 +337,45 @@ export async function updateRoboticsSourceCollaboration(input: unknown): Promise
   if (nextStatus === 'source_response' && parsed.data.note.length < 3) return formResult('Record the source response before saving this milestone.')
 
   let sharedSnapshot = collaboration.sharedSnapshot as RoboticsSharedSnapshot | null
+  let sharingRun: Awaited<ReturnType<typeof createRoboticsRecommendationRun>> = null
   if (nextStatus === 'shared') {
     if (!approved) return formResult('The property owner must approve this specific sharing scope before data is shared.')
-    const interestSnapshot = row.run.interestSnapshot as Record<string, unknown>
-    const assessmentSnapshot = row.run.assessmentSnapshot as Record<string, unknown>
-    const results = row.run.results
-    const candidate = results.candidates.find((item) => item.modelId === collaboration.modelId)
-    const [model, offering] = await Promise.all([
+    sharingRun = await createRoboticsRecommendationRun({
+      organizationId: context.organizationId,
+      interestId: collaboration.interestId,
+      createdByUserId: context.user.id,
+      reason: 'Pre-share fit and evidence revalidation',
+    })
+    if (!sharingRun) return formResult('A completed property assessment and an open request are required before sharing.')
+    const candidate = sharingRun.results.candidates.find((item) => item.modelId === collaboration.modelId)
+    const [model, offering, activePartnerships] = await Promise.all([
       db.select().from(roboticsModel).where(and(eq(roboticsModel.id, collaboration.modelId), eq(roboticsModel.organizationId, context.organizationId))).limit(1).then((rows) => rows[0]),
       db.select().from(roboticsSourceOffering).where(and(eq(roboticsSourceOffering.id, collaboration.offeringId), eq(roboticsSourceOffering.organizationId, context.organizationId), eq(roboticsSourceOffering.partnerId, collaboration.partnerId))).limit(1).then((rows) => rows[0]),
+      db.select({ partnerId: partnerReferral.partnerId, category: solutionPartner.category, active: solutionPartner.active })
+        .from(partnerReferral)
+        .innerJoin(solutionPartner, and(eq(solutionPartner.id, partnerReferral.partnerId), eq(solutionPartner.organizationId, context.organizationId)))
+        .where(and(
+          eq(partnerReferral.organizationId, context.organizationId),
+          eq(partnerReferral.propertyId, row.property.id),
+          inArray(partnerReferral.status, ['accepted', 'in_progress', 'won']),
+        )),
     ])
     const manufacturer = model
       ? (await db.select({ name: roboticsManufacturer.name }).from(roboticsManufacturer).where(and(eq(roboticsManufacturer.id, model.manufacturerId), eq(roboticsManufacturer.organizationId, context.organizationId))).limit(1))[0]
       : undefined
+    const activeRoboticsPartnerships = activePartnerships.filter((item) => item.active && ['robotics', 'both'].includes(item.category))
+    const existingPartnerIds = new Set(activeRoboticsPartnerships.map((item) => item.partnerId))
+    const needsAlternativeReason = existingPartnerIds.size > 0 && !existingPartnerIds.has(collaboration.partnerId)
+    if (needsAlternativeReason && (!collaboration.overrideBasis || !collaboration.overrideReason || collaboration.overrideReason.trim().length < 12)) {
+      return formResult('An active robotics partnership now covers this request. Record why it cannot meet the documented need or confirm that the owner requested an alternative before sharing.')
+    }
     if (!model || !offering || !manufacturer || !candidate?.eligible || !candidate.offers.some((offer) => offer.offeringId === offering.id && offer.unmetRequirements.length === 0)) {
-      return formResult('The selected model/source no longer has a passing fit snapshot. Refresh and review before sharing.')
+      return formResult('The selected model/source no longer passes the current fit and evidence gates. Refresh and review before sharing.')
     }
     sharedSnapshot = buildSharedSnapshot({
       scope: collaboration.consentScope,
-      interestSnapshot,
-      assessmentSnapshot,
+      interestSnapshot: sharingRun.interestSnapshot,
+      assessmentSnapshot: sharingRun.assessmentSnapshot,
       candidate,
       model,
       manufacturerName: manufacturer.name,
@@ -358,7 +391,14 @@ export async function updateRoboticsSourceCollaboration(input: unknown): Promise
   await db.transaction(async (tx) => {
     const updated = await tx.update(roboticsSourceCollaboration).set({
       status: nextStatus,
-      ...(nextStatus === 'shared' ? { sharedAt: now, sharedByUserId: context.user.id, shareMethod: 'manual_admin', sharedSnapshot } : {}),
+      ...(nextStatus === 'shared' && sharingRun ? {
+        recommendationRunId: sharingRun.id,
+        assessmentId: sharingRun.assessmentId,
+        sharedAt: now,
+        sharedByUserId: context.user.id,
+        shareMethod: 'manual_admin',
+        sharedSnapshot,
+      } : {}),
       updatedAt: now,
     }).where(and(
       eq(roboticsSourceCollaboration.id, collaboration.id),
@@ -374,11 +414,20 @@ export async function updateRoboticsSourceCollaboration(input: unknown): Promise
       actorType: 'admin',
       actorUserId: context.user.id,
       note: parsed.data.note || (nextStatus === 'shared' ? 'Minimum approved information snapshot recorded for a deliberate manual outreach step.' : `Collaboration moved to ${nextStatus.replaceAll('_', ' ')}.`),
-      detail: { from: collaboration.status, to: nextStatus, ...(nextStatus === 'shared' ? { shareMethod: 'manual_admin' } : {}) },
+      detail: {
+        from: collaboration.status,
+        to: nextStatus,
+        ...(nextStatus === 'shared' ? {
+          shareMethod: 'manual_admin',
+          recommendationRunId: sharingRun?.id,
+          assessmentId: sharingRun?.assessmentId,
+          assessmentVersion: sharingRun?.assessmentVersion,
+        } : {}),
+      },
       createdAt: now,
     })
   })
-  await recordAudit({ organizationId: context.organizationId, userId: context.user.id, action: `robotics_collaboration.${nextStatus}`, entityType: 'robotics_source_collaboration', entityId: collaboration.id, metadata: { interestId: collaboration.interestId, partnerId: collaboration.partnerId, modelId: collaboration.modelId, status: nextStatus } })
+  await recordAudit({ organizationId: context.organizationId, userId: context.user.id, action: `robotics_collaboration.${nextStatus}`, entityType: 'robotics_source_collaboration', entityId: collaboration.id, metadata: { interestId: collaboration.interestId, partnerId: collaboration.partnerId, modelId: collaboration.modelId, status: nextStatus, ...(nextStatus === 'shared' ? { recommendationRunId: sharingRun?.id, assessmentId: sharingRun?.assessmentId } : {}) } })
   refreshCollaborationViews(row.property.id)
   return { ok: true, id: collaboration.id }
 }

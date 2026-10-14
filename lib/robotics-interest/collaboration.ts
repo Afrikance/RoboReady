@@ -1,6 +1,6 @@
 import type { RoboticsCollaborationStatus } from '@/lib/db/schema'
 
-const TRANSITIONS: Record<RoboticsCollaborationStatus, readonly RoboticsCollaborationStatus[]> = {
+export const ROBOTICS_COLLABORATION_TRANSITIONS: Record<RoboticsCollaborationStatus, readonly RoboticsCollaborationStatus[]> = {
   consent_pending: ['selected', 'owner_declined', 'withdrawn'],
   selected: ['shared', 'withdrawn'],
   shared: ['source_response', 'fit_confirmed', 'fit_rejected', 'pilot_planning', 'closed', 'withdrawn'],
@@ -24,7 +24,7 @@ export function canTransitionRoboticsCollaboration(
   ownerConsentApproved: boolean,
   hasSharedSnapshot: boolean,
 ): boolean {
-  if (!TRANSITIONS[current].includes(next)) return false
+  if (!ROBOTICS_COLLABORATION_TRANSITIONS[current].includes(next)) return false
   if (['selected', 'shared', 'source_response', 'fit_confirmed', 'fit_rejected', 'pilot_planning', 'pilot_in_progress', 'pilot_completed', 'deployment_planning', 'deployment_in_progress', 'deployment_completed', 'closed'].includes(next)
     && current === 'consent_pending' && !ownerConsentApproved) return false
   if (['source_response', 'fit_confirmed', 'fit_rejected', 'pilot_planning', 'pilot_in_progress', 'pilot_completed', 'deployment_planning', 'deployment_in_progress', 'deployment_completed'].includes(next)
@@ -63,6 +63,7 @@ export function createRoboticsConsentScope(input: {
   partnerName: string
   modelName: string
   includedFields?: readonly RoboticsShareField[]
+  overrideBasis?: 'partner_unable' | 'owner_requested' | null
   overrideReason?: string | null
 }) {
   const includedFields = [...new Set(input.includedFields ?? ROBOTICS_SHARE_FIELDS)]
@@ -71,10 +72,15 @@ export function createRoboticsConsentScope(input: {
     modelName: input.modelName,
     includedFields,
     excludedFields: [...ROBOTICS_EXCLUDED_SHARE_FIELDS],
+    overrideBasis: input.overrideBasis ?? null,
     overrideReason: input.overrideReason?.trim().slice(0, 500) || null,
   }
 }
 
+export function getNextRoboticsCollaborationStatuses(status: RoboticsCollaborationStatus): readonly RoboticsCollaborationStatus[] {
+  return ROBOTICS_COLLABORATION_TRANSITIONS[status]
+}
+
 export function isRoboticsCollaborationStatus(value: unknown): value is RoboticsCollaborationStatus {
-  return typeof value === 'string' && Object.hasOwn(TRANSITIONS, value)
+  return typeof value === 'string' && Object.hasOwn(ROBOTICS_COLLABORATION_TRANSITIONS, value)
 }
